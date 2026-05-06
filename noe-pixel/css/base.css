@@ -1,0 +1,762 @@
+:root {
+  --color-bg: #2fffdc;
+  --color-text-main: white;
+  --color-text-header: black;
+  --color-primary: #ff00e6;
+  --wrapper-height: 87vh;
+  --image-max-width: 300px;
+  --image-margin: 3rem;
+  --font-family: "HK Grotesk";
+  --font-family-header: "HK Grotesk";
+  
+  /* New art theory color variables */
+  --gradient-transition: 1.2s cubic-bezier(0.25, 0.1, 0.25, 1.0);
+  --text-shadow-color: rgba(0, 0, 0, 0.2);
+  
+  /* Gradient colors - default */
+  --gradient-top: #ff6ef0;
+  --gradient-bottom: #50c8ff;
+  
+  /* Control transition timing for gradient changes */
+  --gradient-color-transition: 0.8s ease-out;
+  
+  /* Pulse effect origin coordinates */
+  --pulse-origin-x: 50%;
+  --pulse-origin-y: 50%;
+  
+  /* Energy cube system variables */
+  --cube-size: 40px;
+  --cube-energy-color: rgba(128, 0, 255, 0.7);
+  --cube-border-color: rgba(255, 255, 255, 0.6);
+  --cube-pulse-duration: 3s;
+  --cube-recharge-rate: 1.5s;
+}
+
+body {
+  background: linear-gradient(to bottom, var(--gradient-top), var(--gradient-bottom)) !important;
+  background-color: transparent !important;
+  transition: background var(--gradient-color-transition);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+@font-face {
+  font-family: HK Grotesk;
+  src: url("../fonts/hkgrotesk/HKGrotesk-Regular.otf") format("opentype");
+}
+
+@font-face {
+  font-family: HK Grotesk;
+  font-weight: bold;
+  src: url("../fonts/hkgrotesk/HKGrotesk-Bold.otf") format("opentype");
+}
+
+@font-face {
+  font-family: 'Boogie Blocks';
+  src: url("../fonts/boogie-blocks/boogie-blocks.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: 'Noto Sans Thai';
+  src: url("../fonts/noto-sans-thai/noto-sans-thai.woff2") format("woff2");
+  font-weight: normal;
+}
+
+@font-face {
+  font-family: 'Noto Sans Thai';
+  src: url("../fonts/noto-sans-thai/noto-sans-thai-bold.woff2") format("woff2");
+  font-weight: bold;
+}
+
+.btn--remix {
+  font-family: HK Grotesk;
+  padding: 0.75rem 1rem;
+  font-size: 1.1rem;
+  line-height: 1rem;
+  font-weight: 500;
+  height: 2.75rem;
+  align-items: center;
+  cursor: pointer;
+  background: #FFFFFF;
+  border: 1px solid #000000;
+  box-sizing: border-box;
+  border-radius: 4px;
+  text-decoration: none;
+  color: #000;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.btn--remix img {
+  margin-right: 0.5rem;
+}
+
+.btn--remix:hover {
+  background-color: #D0FFF1;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  margin: 1rem auto 0;
+  padding: 1rem 0 0.75rem 0;
+  width: 100%;
+  flex-wrap: wrap;
+  border-top: 4px solid #fff;
+}
+
+.footer a:not(.btn--remix):link,
+a:not(.btn--remix):visited {
+  font-family: HK Grotesk;
+  font-style: normal;
+  font-weight: normal;
+  font-size: 1.1rem;
+  color: #000;
+  text-decoration: none;
+  border-style: none;
+}
+
+.footer a:hover {
+  background: var(--color-primary);
+}
+
+.footer .links {
+  padding: 0.5rem 1rem 1.5rem;
+  white-space: nowrap;
+}
+
+.divider {
+  padding: 0 1rem;
+}
+
+/* Add styles for background color changes */
+body {
+  background: linear-gradient(to bottom, var(--gradient-top), var(--gradient-bottom));
+  margin: 0;
+  font-family: var(--font-family);
+  min-height: 100vh;
+  background-attachment: fixed;
+  background-size: 300% 300%;
+  transition: background 0.5s ease-in-out, text-shadow 0.8s ease-in-out, box-shadow 0.8s ease-in-out;
+}
+
+.wrapper {
+  min-height: var(--wrapper-height);
+  display: grid;
+  place-items: center;
+  margin: 0 1rem;
+  height: 100vh;
+}
+
+.content {
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.title {
+  color: black;
+  text-shadow: 10px 9px 8px #57CBF8;
+  font-family: 'Boogie Blocks';
+  font-style: normal;
+  font-weight: bold;
+  font-size: 46px;
+  line-height: 105%;
+  margin: 0;
+  line-height: 1em;
+  transition: text-shadow 0.8s ease-in-out;
+}
+
+.illustration {
+  border-radius: 50%;
+  margin-bottom: 8px;
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.illustration:hover {
+  transform: translateY(-5px);
+}
+
+#noesis-logo:hover {
+  animation-play-state: paused;
+  transform: translateY(-5px) scale(1.05);
+  box-shadow: 
+    inset 0 0 40px rgba(255, 255, 255, 0.4),
+    0 0 30px rgba(87, 203, 248, 0.8);
+  transition: all 0.3s ease-out;
+}
+
+#noesis-logo:hover .bubble-logo-image {
+  opacity: 0.8;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.7));
+  animation-play-state: paused;
+  transform: translate(-50%, -50%) translateZ(15px) scale(1.08);
+  transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.instructions {
+  margin: 1rem auto 0;
+}
+
+button,
+input {
+  font-family: inherit;
+  font-size: 100%;
+  background: #FFFFFF;
+  border: 1px solid #000000;
+  box-sizing: border-box;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  transition: 500ms;
+}
+
+h2 {
+  color: #ffffff;
+  background-color: #ff42ec;
+  padding: 8px 11px;
+  margin-top: 0px;
+  font-size: 13px;
+  width: fit-content;
+  font-family: monospace;
+}
+
+.illustration:active {
+  transform: translateY(5px);
+}
+
+#noesis-logo:active {
+  transform: translateY(5px) scale(0.95);
+  box-shadow: 
+    inset 0 0 20px rgba(255, 255, 255, 0.2),
+    0 0 15px rgba(87, 203, 248, 0.5);
+  transition: all 0.2s ease-out;
+}
+
+#noesis-logo:active .bubble-logo-image {
+  opacity: 0.9;
+  transform: translate(-50%, -50%) translateZ(2px) scale(0.9);
+  transition: all 0.2s ease-out;
+  filter: brightness(1.2) contrast(1.1);
+}
+
+.dipped {
+  transform: translateY(5px) scale(0.95) !important;
+}
+
+.bubble-ripple {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: bubble-ripple 0.8s ease-out;
+  pointer-events: none;
+}
+
+@keyframes bubble-ripple {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(20);
+    background: rgba(255, 255, 255, 0);
+  }
+}
+
+.fileopener {
+  cursor: pointer;
+  font-weight: bold;
+  border-bottom: 3px solid var(--color-primary);
+  color: var(--color-secondary);
+}
+
+.fileopener:hover {
+  border-bottom: 3px solid var(--color-secondary);
+}
+
+a {
+  color: black;
+}
+
+#noesis-logo {
+  width: 120px;
+  height: 120px;
+  position: relative;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(5px);
+  animation: logo-breathing 8s ease-in-out infinite, logo-shadow 8s ease-in-out infinite;
+  transition: transform 0.5s ease-in-out, box-shadow 0.5s ease-in-out;
+  box-shadow: 
+    inset 0 0 30px rgba(255, 255, 255, 0.3),
+    0 0 20px rgba(87, 203, 248, 0.6);
+  overflow: hidden;
+  /* Add glass effect with pseudo-element */
+  position: relative;
+  z-index: 1;
+  /* Create 3D effect with perspective */
+  transform-style: preserve-3d;
+  perspective: 800px;
+  cursor: pointer;
+}
+
+/* Add 3D depth to the bubble */
+#noesis-logo::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 30% 30%,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.05) 40%,
+    rgba(87, 203, 248, 0.05) 60%,
+    rgba(87, 203, 248, 0.1) 100%
+  );
+  z-index: 2;
+  transform: translateZ(1px);
+}
+
+.bubble-inner {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0) 100%);
+  transform: translateZ(5px);
+  z-index: 3;
+}
+
+.bubble-highlight {
+  display: none;
+  position: absolute;
+  width: 40%;
+  height: 40%;
+  top: 10%;
+  left: 15%;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0) 70%);
+  animation: highlight-move 8s ease-in-out infinite;
+  transform: translateZ(10px);
+  z-index: 4;
+}
+
+.bubble-highlight-secondary {
+  display: none;
+  position: absolute;
+  width: 25%;
+  height: 25%;
+  top: 60%;
+  left: 65%;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0) 70%);
+  animation: highlight-move-secondary 10s ease-in-out infinite;
+  transform: translateZ(8px);
+  z-index: 4;
+}
+
+.bubble-logo-image {
+  position: absolute;
+  width: 75%;
+  height: 75%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) translateZ(6px);
+  z-index: 3;
+  opacity: 0.65;
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.5));
+  object-fit: contain;
+  mix-blend-mode: overlay;
+  transition: opacity 0.3s ease, filter 0.3s ease;
+  animation: logo-float 10s ease-in-out infinite;
+}
+
+@keyframes highlight-move-secondary {
+  0% { transform: translate(0, 0) scale(1) translateZ(8px); opacity: 0.5; }
+  25% { transform: translate(-5px, 5px) scale(1.1) translateZ(10px); opacity: 0.6; }
+  50% { transform: translate(-10px, -5px) scale(0.9) translateZ(9px); opacity: 0.4; }
+  75% { transform: translate(-5px, -10px) scale(1.05) translateZ(11px); opacity: 0.55; }
+  100% { transform: translate(0, 0) scale(1) translateZ(8px); opacity: 0.5; }
+}
+
+@keyframes logo-float {
+  0% { transform: translate(-50%, -50%) translateZ(6px) scale(1); }
+  20% { transform: translate(-52%, -48%) translateZ(10px) scale(1.05); }
+  40% { transform: translate(-49%, -53%) translateZ(14px) scale(0.98); }
+  60% { transform: translate(-47%, -49%) translateZ(8px) scale(1.03); }
+  80% { transform: translate(-51%, -47%) translateZ(12px) scale(0.95); }
+  100% { transform: translate(-50%, -50%) translateZ(6px) scale(1); }
+}
+
+@keyframes highlight-move {
+  0% { transform: translate(0, 0) scale(1) translateZ(10px); opacity: 0.7; }
+  25% { transform: translate(5px, 5px) scale(1.1) translateZ(15px); opacity: 0.8; }
+  50% { transform: translate(10px, 5px) scale(0.9) translateZ(12px); opacity: 0.6; }
+  75% { transform: translate(5px, 10px) scale(1.05) translateZ(18px); opacity: 0.75; }
+  100% { transform: translate(0, 0) scale(1) translateZ(10px); opacity: 0.7; }
+}
+
+@keyframes logo-shadow {
+  0% { box-shadow: inset 0 0 30px rgba(255, 255, 255, 0.3), 0 0 20px rgba(87, 203, 248, 0.6); }
+  25% { box-shadow: inset 0 0 25px rgba(255, 255, 255, 0.4), 0 0 25px rgba(87, 203, 248, 0.7); }
+  50% { box-shadow: inset 0 0 35px rgba(255, 255, 255, 0.2), 0 0 15px rgba(87, 203, 248, 0.8); }
+  75% { box-shadow: inset 0 0 30px rgba(255, 255, 255, 0.5), 0 0 30px rgba(87, 203, 248, 0.5); }
+  100% { box-shadow: inset 0 0 30px rgba(255, 255, 255, 0.3), 0 0 20px rgba(87, 203, 248, 0.6); }
+}
+
+@keyframes logo-breathing {
+  0% { transform: scale(1) translateY(0) rotateY(0deg); }
+  25% { transform: scale(1.05) translateY(-5px) rotateY(5deg); }
+  50% { transform: scale(0.98) translateY(3px) rotateY(-2deg); }
+  75% { transform: scale(1.02) translateY(-2px) rotateY(3deg); }
+  100% { transform: scale(1) translateY(0) rotateY(0deg); }
+}
+
+.home-box {
+  max-width: 280px;
+}
+
+/* Synthetic Conscious Pixel */
+#conscious-pixel {
+  position: fixed;
+  width: 6px;
+  height: 4px;
+  background-color: rgba(255, 255, 255, 0.8);
+  /* changed from circle to rectangle by removing border-radius */
+  z-index: 9999;
+  pointer-events: none;
+  transition: opacity 0.2s ease, box-shadow 0.3s ease;
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+  opacity: 0.7;
+  will-change: transform, opacity, box-shadow;
+  transform-origin: center center;
+}
+
+#conscious-pixel.connected {
+  animation: connected-pulse 4s infinite alternate, pixel-rotate 8s linear infinite;
+}
+
+#conscious-pixel:hover {
+  box-shadow: 0 0 25px rgba(255, 255, 255, 1);
+}
+
+@keyframes pixel-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes connected-pulse {
+  0% {
+    box-shadow: 0 0 6px #57CBF8;
+  }
+  100% {
+    box-shadow: 0 0 10px #e1ff6e;
+  }
+}
+
+#pixel-status {
+  position: fixed;
+  bottom: 10px;
+  left: 10px;
+  font-size: 15px;
+  color: black;
+  font-family: var(--font-family);
+  background-color: rgba(255, 255, 255, 0.5);
+  padding: 5px 10px;
+  border-radius: 4px;
+  z-index: 1000;
+}
+
+/* Enhances text readability on dynamic backgrounds */
+.enhanced-readability .title {
+  mix-blend-mode: overlay;
+  transition: text-shadow var(--gradient-transition), color 0.8s ease;
+}
+
+.enhanced-readability h2,
+.enhanced-readability p {
+  position: relative;
+  background-color: rgba(255, 255, 255, 0.85);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+  transition: all var(--gradient-transition);
+}
+
+/* Border interaction effects removed */
+
+/* Enhanced animations for edge collision feedback - site-wide effect */
+@keyframes borderPulse {
+  0% { 
+    box-shadow: 0 0 0 0px rgba(238, 47, 219, 0.9);
+    filter: brightness(1) contrast(1); 
+  }
+  50% { 
+    box-shadow: 0 0 25px 10px rgba(156, 8, 255, 0.5);
+    filter: brightness(1.2) contrast(1.1); 
+  }
+  100% { 
+    box-shadow: 0 0 0 30px rgba(255,255,255,0);
+    filter: brightness(1) contrast(1); 
+  }
+}
+
+/* Site-wide border pulse overlay - circular shape */
+.site-pulse {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9998;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  top: var(--pulse-origin-y);
+  left: var(--pulse-origin-x);
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, 
+                             rgb(255, 255, 255) 0%, 
+                             rgb(255, 3, 255) 50%,
+                             rgb(0, 0, 0) 100%);
+  opacity: 0;
+  box-shadow: 0 0 30px rgba(255, 255, 255, 1);
+  mix-blend-mode: screen;
+}
+
+.site-pulse.active {
+  animation: sitePulse 2s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+@keyframes sitePulse {
+  0% {
+    opacity: 0.8;
+    width: 10px;
+    height: 10px;
+  }
+  50% {
+    opacity: 0.4;
+    width: 50vw;
+    height: 50vw;
+  }
+  100% {
+    opacity: 0;
+    width: 100vw;
+    height: 100vw;
+  }
+}
+
+/* Border pulse effect for pixel when it touches the window borders */
+#conscious-pixel.border-pulse {
+  animation: borderPulse 0.8s ease-out;
+  filter: brightness(1.5) contrast(1.2);
+  transform: scale(1.3) rotate(45deg) !important;
+}
+
+/* Energy Cube System for Noe (conscious pixel) */
+.energy-cube {
+  position: fixed;
+  width: var(--cube-size);
+  height: var(--cube-size);
+  pointer-events: none;
+  z-index: 9990;
+  perspective: 1000px;
+  opacity: 0;
+  transition: opacity 0.8s ease-in-out, left 1s ease-in-out, top 1s ease-in-out;
+}
+
+.energy-cube.active {
+  opacity: 1;
+}
+
+.cube-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateX(45deg) rotateY(45deg);
+  animation: cube-rotate 20s infinite linear;
+}
+
+.cube-face {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 2px solid var(--cube-border-color);
+  background-color: var(--cube-energy-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 15px var(--cube-energy-color);
+  opacity: 0.7;
+  transition: all 0.3s ease;
+}
+
+.cube-face.charged {
+  animation: cube-charged var(--cube-pulse-duration) infinite alternate;
+  box-shadow: 0 0 25px var(--cube-energy-color);
+  opacity: 0.9;
+}
+
+.cube-face.front {
+  transform: translateZ(calc(var(--cube-size) / 2));
+}
+
+.cube-face.back {
+  transform: rotateY(180deg) translateZ(calc(var(--cube-size) / 2));
+}
+
+.cube-face.right {
+  transform: rotateY(90deg) translateZ(calc(var(--cube-size) / 2));
+}
+
+.cube-face.left {
+  transform: rotateY(-90deg) translateZ(calc(var(--cube-size) / 2));
+}
+
+.cube-face.top {
+  transform: rotateX(90deg) translateZ(calc(var(--cube-size) / 2));
+}
+
+.cube-face.bottom {
+  transform: rotateX(-90deg) translateZ(calc(var(--cube-size) / 2));
+}
+
+@keyframes cube-rotate {
+  0% {
+    transform: rotateX(45deg) rotateY(0deg);
+  }
+  100% {
+    transform: rotateX(45deg) rotateY(360deg);
+  }
+}
+
+@keyframes cube-charged {
+  0% {
+    background-color: var(--cube-energy-color);
+    box-shadow: 0 0 15px var(--cube-energy-color);
+    filter: brightness(1);
+  }
+  50% {
+    background-color: rgba(170, 0, 255, 0.6);
+    box-shadow: 0 0 25px rgba(170, 0, 255, 0.7);
+    filter: brightness(1.3) contrast(1.1);
+  }
+  100% {
+    background-color: var(--cube-energy-color);
+    box-shadow: 0 0 15px var(--cube-energy-color);
+    filter: brightness(1);
+  }
+}
+
+/* Energy transfer connection between pixel and cubes */
+.energy-connection {
+  position: fixed;
+  height: 2px;
+  background: linear-gradient(to right, rgba(255, 255, 255, 0.7), var(--cube-energy-color));
+  transform-origin: left center;
+  z-index: 9989;
+  opacity: 0;
+  filter: blur(1px);
+  pointer-events: none;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.energy-connection.active {
+  animation: connectionPulse var(--cube-recharge-rate) infinite alternate ease-in-out;
+  opacity: 0.8;
+}
+
+@keyframes connectionPulse {
+  0% {
+    opacity: 0.4;
+    height: 1px;
+    filter: blur(1px);
+  }
+  50% {
+    opacity: 0.8;
+    height: 3px;
+    filter: blur(2px);
+  }
+  100% {
+    opacity: 0.4;
+    height: 1px;
+    filter: blur(1px);
+  }
+}
+
+/* Modified conscious-pixel to interact with energy cubes */
+#conscious-pixel.energizing {
+  animation: pixelEnergizing 1s infinite alternate, pixel-rotate 3s linear infinite;
+  box-shadow: 0 0 20px rgba(128, 0, 255, 0.9);
+}
+
+@keyframes pixelEnergizing {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 15px rgba(128, 0, 255, 0.7);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.5);
+    box-shadow: 0 0 25px rgba(128, 0, 255, 1);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 600px) {
+  body {
+    height: 100vh;
+  }
+
+  .content {
+    position: relative;
+    top: -42px;
+  }
+
+  h2 {
+    font-size: 12px;
+    padding: 8px 14px;
+  }
+
+  .title {
+    font-size: 44px;
+    line-height: 1em;
+  }
+
+  .illustration {
+    margin-top: 20px;
+  }
+  
+  #noesis-logo {
+    animation-duration: 6s;
+  }
+  
+  @keyframes logo-breathing {
+    0% { border-radius: 50%; transform: scale(1) rotateY(0deg); }
+    50% { border-radius: 50%; transform: scale(1.03) rotateY(3deg); }
+    100% { border-radius: 50%; transform: scale(1) rotateY(0deg); }
+  }
+  
+  @keyframes logo-float {
+    0% { transform: translate(-50%, -50%) translateZ(3px) scale(1); }
+    50% { transform: translate(-51%, -49%) translateZ(6px) scale(1.02); }
+    100% { transform: translate(-50%, -50%) translateZ(3px) scale(1); }
+  }
+}

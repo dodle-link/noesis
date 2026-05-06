@@ -1,0 +1,51 @@
+#!/usr/bin/env fish
+#
+# fibonacci.nos - A simple Fibonacci sequence generator for nos/fish shell
+# 
+# Usage:
+#   ./fibonacci.nos [count]
+#
+# If no count is provided, defaults to 10 terms
+
+function fibonacci
+    set -l count $argv[1]
+    test -z "$count"; and set count 10
+    
+    # Validate input
+    if not string match -qr '^[0-9]+$' -- $count
+        echo "Error: Please provide a non-negative integer"
+        return 1
+    end
+    
+    # Handle special cases
+    if test $count -eq 0
+        return 0
+    end
+    
+    echo "Generating Fibonacci sequence for $count terms:"
+    
+    # First two terms
+    set -l a 0
+    set -l b 1
+    
+    # Output first term if requested
+    if test $count -ge 1
+        echo "Term 1: $a"
+    end
+    
+    # Output second term if requested
+    if test $count -ge 2
+        echo "Term 2: $b"
+    end
+    
+    # Generate remaining terms
+    for i in (seq 3 $count)
+        set -l next (math $a + $b)
+        echo "Term $i: $next"
+        set a $b
+        set b $next
+    end
+end
+
+# Execute the fibonacci function with arguments from command line
+fibonacci $argv[1]

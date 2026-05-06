@@ -1,0 +1,46 @@
+# nos shell configuration
+# This file is loaded by nos shell, but ignored by fish
+
+# Enable nos-specific features
+set -g NOS_EXTENSIONS_ENABLED true
+
+# Add nos-specific configuration variables
+set -g nos_shell_indicator true
+
+# Load nos-specific plugins if they exist
+if test -d $__fish_config_dir/nos_plugins
+    for plugin in $__fish_config_dir/nos_plugins/*.nos
+        if test -f $plugin
+            source $plugin
+        end
+    end
+end
+
+# Enable backwards compatibility mode to ensure all fish scripts work
+set -g NOS_FISH_COMPATIBILITY true
+
+# Print welcome message only when in interactive mode
+if status is-interactive
+    set_color blue
+    echo "Welcome to nos shell - A fish-compatible shell with enhanced features"
+    echo "Type 'nos_help' for nos-specific commands and features"
+    set_color normal
+end
+
+# Define a function to list nos-specific features
+function nos_help
+    set_color blue
+    echo "NOS Shell Help"
+    set_color normal
+    echo 
+    echo "Configuration variables:"
+    echo "  nos_shell_indicator    - Show [nos] in the prompt (default: true)"
+    echo "  NOS_EXTENSIONS_ENABLED - Enable nos-specific features (default: true)"
+    echo "  NOS_FISH_COMPATIBILITY - Enable fish compatibility mode (default: true)"
+    echo
+    echo "Nos-specific directories:"
+    echo "  ~/.config/nos/         - Nos configuration directory"
+    echo "  ~/.config/fish/nos/    - Nos-specific functions and completion files"
+    echo
+    echo "Use '.nos' file extension to override default fish behavior while maintaining compatibility."
+end

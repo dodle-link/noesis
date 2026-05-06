@@ -1,0 +1,90 @@
+/* Rainbow Bubble Effect CSS */
+
+/* Rainbow effect for the bubble */
+@keyframes rainbow-rotation {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Adds rainbow surface effect to the bubble */
+#noesis-logo.rainbow-bubble {
+  background: linear-gradient(
+    124deg,
+    #8d29ff,
+    #fd75ff,
+    #00ddff,
+    #fff94e,
+    #ffffff
+  );
+  background-size: 1800% 1800%;
+  animation: rainbow-rotation 12s ease infinite, 
+             logo-breathing 8s ease-in-out infinite;
+  box-shadow: 
+    inset 0 0 30px rgba(255, 255, 255, 0.5),
+    0 0 25px rgba(255, 255, 255, 0.8);
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+}
+
+/* Enhanced bubble highlight effect for rainbow mode */
+#noesis-logo.rainbow-bubble .bubble-highlight {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0) 70%);
+  animation: highlight-move 10s ease-in-out infinite;
+  opacity: 0.9;
+}
+
+#noesis-logo.rainbow-bubble .bubble-highlight-secondary {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 70%);
+  animation: highlight-move-secondary 8s ease-in-out infinite;
+  opacity: 0.7;
+}
+
+/* Enhanced bubble inner effect */
+#noesis-logo.rainbow-bubble .bubble-inner {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0) 100%);
+}
+
+/* Enhanced ripple effect for rainbow mode */
+.rainbow-bubble-ripple {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: rainbow-ripple 1.2s ease-out;
+  z-index: 100;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+@keyframes rainbow-ripple {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 
+      0 0 0 0 rgba(255, 0, 0, 0.8),
+      0 0 0 10px rgba(255, 165, 0, 0.7),
+      0 0 0 20px rgba(255, 255, 0, 0.6),
+      0 0 0 30px rgba(0, 128, 0, 0.5),
+      0 0 0 40px rgba(0, 0, 255, 0.4),
+      0 0 0 50px rgba(75, 0, 130, 0.3),
+      0 0 0 60px rgba(238, 130, 238, 0.2);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2.5);
+    box-shadow: 
+      0 0 0 10px rgba(255, 0, 0, 0),
+      0 0 0 20px rgba(255, 165, 0, 0),
+      0 0 0 30px rgba(255, 255, 0, 0),
+      0 0 0 40px rgba(0, 128, 0, 0),
+      0 0 0 50px rgba(0, 0, 255, 0),
+      0 0 0 60px rgba(75, 0, 130, 0),
+      0 0 0 70px rgba(238, 130, 238, 0);
+  }
+}

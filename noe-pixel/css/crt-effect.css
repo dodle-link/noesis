@@ -1,0 +1,215 @@
+/* CRT (Cathode Ray Tube) Effect CSS for Synthetic Conscious Pixel */
+
+/* Basic CRT screen effect with curvature */
+.crt-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border-radius: 50%;  /* Keeps the bubble shape */
+  pointer-events: none;
+  z-index: 10;
+  overflow: hidden;
+}
+
+/* Scan lines overlay */
+.crt-scanlines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15),
+    rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+  z-index: 20;
+  border-radius: 50%;
+  opacity: 0.7;
+}
+
+/* Vignette effect (darkened edges) */
+.crt-vignette {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(
+    circle at center,
+    transparent 60%,
+    rgba(0, 0, 0, 0.4) 100%
+  );
+  pointer-events: none;
+  z-index: 15;
+  border-radius: 50%;
+}
+
+/* RGB pixel separation effect animation */
+.crt-rgb-shift {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 5;
+  mix-blend-mode: screen;
+}
+
+/* CRT flicker animation */
+@keyframes crt-flicker {
+  0% { opacity: 0.98; }
+  3% { opacity: 0.9; }
+  5% { opacity: 0.98; }
+  10% { opacity: 0.99; }
+  20% { opacity: 0.96; }
+  30% { opacity: 0.98; }
+  70% { opacity: 0.99; }
+  80% { opacity: 0.96; }
+  90% { opacity: 0.98; }
+  100% { opacity: 1; }
+}
+
+/* CRT on/off animation */
+@keyframes crt-on {
+  0% { 
+    opacity: 0; 
+    transform: scale(0.8);
+    filter: brightness(0.1) contrast(1);
+  }
+  10% { 
+    opacity: 1; 
+    transform: scale(1.05);
+    filter: brightness(2) contrast(0.3);
+  }
+  30% { 
+    transform: scale(0.95);
+    filter: brightness(1.5) contrast(1.2);
+  }
+  50% { 
+    transform: scale(1.02);
+    filter: brightness(1.2) contrast(1);
+  }
+  70% { 
+    transform: scale(0.98);
+    filter: brightness(1.1) contrast(1.1);
+  }
+  100% { 
+    transform: scale(1);
+    filter: brightness(1) contrast(1);
+  }
+}
+
+/* Add CRT effect classes to noesis-logo */
+#noesis-logo.crt-enabled {
+  animation: crt-flicker 4s infinite alternate;
+  position: relative;
+}
+
+#noesis-logo.crt-enabled:after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%);
+  background-size: 100% 4px;
+  z-index: 30;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+#noesis-logo.crt-enabled .bubble-logo-image {
+  filter: brightness(1.1) contrast(1.3) saturate(1.5);
+  animation: crt-flicker 2s infinite alternate;
+}
+
+/* CRT startup animation */
+#noesis-logo.crt-startup {
+  animation: crt-on 2s ease-in-out forwards;
+}
+
+/* Horizontal sync effect */
+@keyframes h-sync {
+  0% { transform: translateX(0); }
+  10% { transform: translateX(-1px); }
+  20% { transform: translateX(1px); }
+  30% { transform: translateX(0); }
+  100% { transform: translateX(0); }
+}
+
+/* Add an occasional horizontal sync animation */
+#noesis-logo.crt-enabled .bubble-inner {
+  animation: h-sync 8s ease-in-out infinite;
+}
+
+/* CRT toggle switch styles */
+.crt-toggle-container {
+  display: flex;
+  align-items: center;
+  margin-top: 15px;
+}
+
+.crt-toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+  margin-right: 10px;
+}
+
+.crt-toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.crt-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+  border-radius: 24px;
+}
+
+.crt-toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked + .crt-toggle-slider {
+  background-color: #f857e7;
+}
+
+input:focus + .crt-toggle-slider {
+  box-shadow: 0 0 1px #f857e7;
+}
+
+input:checked + .crt-toggle-slider:before {
+  transform: translateX(26px);
+}
+
+.crt-toggle-label {
+  font-weight: bold;
+  color: #333;
+}

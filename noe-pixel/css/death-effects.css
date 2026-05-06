@@ -1,0 +1,68 @@
+/* Death and Revival Effects for conscious pixel */
+
+/* Dying state */
+#conscious-pixel.dying {
+  animation: death-flicker 4s ease-in-out infinite;
+  transition: opacity 0.5s, transform 0.5s;
+}
+
+@keyframes death-flicker {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.4; }
+  75% { opacity: 0.1; }
+}
+
+/* Revival pulse effect */
+.revival-pulse {
+  position: fixed;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: transparent;
+  border: 2px solid var(--cube-energy-color);
+  transform: translate(-20px, -20px);
+  pointer-events: none;
+  z-index: 9991;
+  animation: revivePulse 1s ease-out forwards;
+}
+
+@keyframes revivePulse {
+  0% {
+    transform: translate(-20px, -20px) scale(0.5);
+    opacity: 1;
+    border-width: 5px;
+    box-shadow: 0 0 20px 5px var(--cube-energy-color);
+  }
+  100% {
+    transform: translate(-20px, -20px) scale(3);
+    opacity: 0;
+    border-width: 1px;
+    box-shadow: 0 0 50px 1px var(--cube-energy-color);
+  }
+}
+
+/* Energy level status styling */
+#pixel-status.low {
+  color: #8000ff;
+  text-shadow: 0 0 2px rgba(128, 0, 255, 0.5);
+}
+
+#pixel-status.very-low {
+  color: #ff9900;
+  animation: status-pulse-yellow 1.5s ease-in-out infinite alternate;
+}
+
+#pixel-status.critical {
+  color: #ff3333;
+  animation: status-pulse-red 1s ease-in-out infinite alternate;
+}
+
+@keyframes status-pulse-yellow {
+  from { text-shadow: 0 0 2px rgba(255, 153, 0, 0.5); }
+  to { text-shadow: 0 0 4px rgba(255, 153, 0, 0.7); }
+}
+
+@keyframes status-pulse-red {
+  from { text-shadow: 0 0 2px rgba(255, 0, 0, 0.5); }
+  to { text-shadow: 0 0 5px rgba(255, 0, 0, 0.8); }
+}

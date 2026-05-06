@@ -1,0 +1,7 @@
+# This is the nos version of the test_extension function
+# This should take precedence over the .fish version
+
+function test_extension
+    echo "This is the NOS version"
+    set -g test_extension_source "nos"
+end

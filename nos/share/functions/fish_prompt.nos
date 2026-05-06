@@ -1,0 +1,35 @@
+# name: Default (nos enhanced)
+# author: NOS Team (based on Lily Ballard's fish_prompt)
+
+function fish_prompt --description 'Write out the prompt with nos enhancements'
+    set -l last_pipestatus $pipestatus
+    set -lx __fish_last_status $status # Export for __fish_print_pipestatus.
+    set -l normal (set_color normal)
+    set -q fish_color_status
+    or set -g fish_color_status red
+
+    # NOS Enhancement: Add shell identification in prompt
+    set -q nos_shell_indicator
+    or set -g nos_shell_indicator true
+    
+    # Color the prompt differently when we're root
+    set -l color_cwd $fish_color_cwd
+    set -l suffix '>'
+    if functions -q fish_is_root_user; and fish_is_root_user
+        if set -q fish_color_cwd_root
+            set color_cwd $fish_color_cwd_root
+        end
+        set suffix '#'
+    end
+
+    # Write pipestatus
+    set -l prompt_status (__fish_print_pipestatus "[" "] " "|" (set_color $fish_color_status) (set_color $fish_color_status) $last_pipestatus)
+
+    # NOS Enhancement: Show shell indicator if enabled
+    set -l shell_indicator ""
+    if test "$nos_shell_indicator" = true
+        set shell_indicator (set_color blue)"[nos] "(set_color normal)
+    end
+
+    echo -n -s $shell_indicator (set_color $color_cwd) (prompt_pwd) $normal $prompt_status $suffix " "
+end
