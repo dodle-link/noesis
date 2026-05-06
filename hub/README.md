@@ -9,7 +9,7 @@ Noesis Hub is a fully independent platform connector hub that provides standardi
 ## Repository Organization
 
 Noesis Hub is an independent project:
-- **Noesis Hub**: https://github.com/void-sign/noesis-hub (MIT License)
+- **Noesis Hub**: https://github.com/dodle-link/noesis-hub (MIT License)
   - 100% standalone connector hub for different platforms
   - Communicates with Noesis only through API when necessary
 

@@ -21,7 +21,7 @@ Unlike traditional AI systems that simply process inputs and outputs, Noe was de
 ```fish
 # Install the Noesis system (run these commands as root or with sudo)
 # Contact your system administrator for the appropriate installation path
-git clone https://github.com/void-sign/noesis.git
+git clone https://github.com/dodle-link/noesis.git
 # Run any additional setup required by the Noesis system
 ```
 
@@ -73,4 +73,4 @@ This project is licensed under the Noesis License - see the [LICENSE](LICENSE) f
 
 See [CHANGELOG_v1.1.0.md](docs/CHANGELOG_v1.1.0.md) for a detailed list of changes in each version.
 
-For more details about the Noesis project, visit the main repository: [Noesis Project](https://github.com/void-sign/noesis)
+For more details about the Noesis project, visit the main repository: [Noesis Project](https://github.com/dodle-link/noesis)
