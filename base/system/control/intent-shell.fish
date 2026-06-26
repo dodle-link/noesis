@@ -1,19 +1,19 @@
 #!/usr/bin/env fish
 #
-# Copyright (c) 2025 Napol Thanarangkaun (napol@noesis.run)
+# Copyright (c) Napol Thanarangkaun
 # Licensed under Noesis License - See LICENSE file for details
 #
 
 # intent_shell.fish - Shell command processor for intent system
 
 # Source required dependencies
-# Adjust path to look for noesis_lib.fish in the proper location
-if test -f system/utils/noesis_lib.fish
-    source system/utils/noesis_lib.fish
-else if test -f ../utils/noesis_lib.fish
-    source ../utils/noesis_lib.fish
+# Try to source noesis_lib.fish if it exists
+set -l lib_path (dirname (dirname (status --current-filename)))/utils/noesis_lib.fish
+if test -f $lib_path
+    source $lib_path
 else
-    echo "Warning: noesis_lib.fish not found, some functions may be unavailable"
+    # Source file not found - this is expected in current version
+    # Some functions may be unavailable
 end
 
 # Initialize the intent shell system

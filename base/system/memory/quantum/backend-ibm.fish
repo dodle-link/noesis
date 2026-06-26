@@ -1,6 +1,6 @@
 #!/usr/bin/env fish
 #
-# Copyright (c) 2025 Napol Thanarangkaun (napol@noesis.run)
+# Copyright (c) Napol Thanarangkaun
 # Licensed under Noesis License - See LICENSE file for details
 #
 
@@ -8,7 +8,7 @@
 # This file handles IBM Quantum Experience API integration
 
 # Source the quantum core
-source system/memory/quantum/unit.fish
+source (dirname (dirname (status --current-filename)))/unit.fish
 
 # Maximum qubits for IBM quantum computers
 set -g IBM_MAX_QUBITS 5

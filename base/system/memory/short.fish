@@ -1,13 +1,16 @@
 #!/usr/bin/env fish
 #
-# Copyright (c) 2025 Napol Thanarangkaun (napol@noesis.run)
+# Copyright (c) Napol Thanarangkaun
 # Licensed under Noesis License - See LICENSE file for details
 #
 
 # data.fish - Data storage and retrieval implementation for Noesis
 
-# Source required dependencies
-source src/utils/noesis_lib.fish
+# Source required dependencies if available
+set -l lib_path (dirname (dirname (dirname (status --current-filename))))/src/utils/noesis_lib.fish
+if test -f $lib_path
+    source $lib_path
+end
 
 # Constants
 set -g MAX_DATA_ENTRIES 1000

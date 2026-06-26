@@ -1,13 +1,13 @@
 #!/usr/bin/env fish
 #
-# Copyright (c) 2025 Napol Thanarangkaun (napol@noesis.run)
+# Copyright (c) Napol Thanarangkaun
 # Licensed under Noesis License - See LICENSE file for details
 #
 
 # compiler.fish - Quantum circuit compiler for Noesis
 
 # Source the quantum core
-source system/memory/quantum/unit.fish
+source (dirname (status --current-filename))/unit.fish
 
 # Constants
 set -g OPTIMIZATION_NONE 0

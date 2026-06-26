@@ -1,6 +1,6 @@
 // file_extension_handler.rs - Handling for dual file extensions
 //
-// Copyright (c) 2025 Napol Thanarangkaun (Noesis Open Shell)
+// Copyright (c) Napol Thanarangkaun (Noesis Open Shell)
 //
 // This module provides an abstraction layer for handling different file extensions 
 // in the nos shell. It allows seamlessly supporting both .fish and .nos files,

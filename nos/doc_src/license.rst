@@ -8,7 +8,7 @@ NOS is a fork of the fish shell.
 Copyright © 2005-2009 Axel Liljencrantz, 
 Copyright © 2009-2025 fish-shell contributors. 
 
-Copyright © 2025 Napol Thanarangkaun (Noesis Open Shell)
+Copyright © Napol Thanarangkaun (Noesis Open Shell)
 
 The Fish Shell is released under the GNU General Public License, version 2.
 

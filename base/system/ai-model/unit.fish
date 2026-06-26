@@ -1,13 +1,13 @@
 #!/usr/bin/env fish
 #
-# Copyright (c) 2025 Napol Thanarangkaun (napol@noesis.run)
+# Copyright (c) Napol Thanarangkaun
 # Licensed under Noesis License - See LICENSE file for details
 #
 
 # unit.fish - AI integration with Hugging Face models for Noesis
 
 # Source consciousness module
-source system/ai-model/consciousness.fish
+source (dirname (status --current-filename))/consciousness.fish
 
 # AI system settings
 set -g AI_SYSTEM_ENABLED false

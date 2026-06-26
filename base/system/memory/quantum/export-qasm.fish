@@ -1,13 +1,13 @@
 #!/usr/bin/env fish
 #
-# Copyright (c) 2025 Napol Thanarangkaun (napol@noesis.run)
+# Copyright (c) Napol Thanarangkaun
 # Licensed under Noesis License - See LICENSE file for details
 #
 
 # export_qasm.fish - Functions for exporting quantum circuits to OpenQASM 2.0 format
 
 # Source the quantum core
-source system/memory/quantum/unit.fish
+source (dirname (dirname (status --current-filename)))/unit.fish
 
 # Export a circuit to OpenQASM 2.0 format
 function export_qasm

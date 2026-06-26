@@ -1,6 +1,6 @@
 #!/usr/bin/env fish
 #
-# Copyright (c) 2025 Napol Thanarangkaun (napol@noesis.run)
+# Copyright (c) Napol Thanarangkaun
 # Licensed under Noesis License - See LICENSE file for details
 #
 
@@ -16,7 +16,7 @@ set -g SCRIPT_DIR (dirname (status filename))
 function load_modules
     # With the centralized intent.fish, we only need to source that file
     # as it will handle loading all other required modules
-    source $SCRIPT_DIR/soul/intent.fish
+    source (dirname (status --current-filename))/soul/intent.fish
 end
 
 # Define colors for better readability
@@ -131,7 +131,7 @@ end
 function show_version
     echo "Noesis v$NOESIS_VERSION"
     echo "Synthetic Conscious System"
-    echo "Copyright (c) 2025 Napol Thanarangkaun (napol@noesis.run)"
+    echo "Copyright (c) Napol Thanarangkaun"
     echo "Licensed under Noesis License - See LICENSE file for details"
     return 0
 end
@@ -371,7 +371,7 @@ function noesis_main
             case "-q" "--quantum"
                 log_with_timestamp "Starting Noesis in quantum mode..." "INFO"
                 # Source intent.fish which will handle everything
-                source soul/intent.fish
+                source (dirname (status --current-filename))/soul/intent.fish
                 # Call main function from intent.fish with quantum flag
                 main --quantum
                 return $status
@@ -397,7 +397,7 @@ function noesis_main
         print_banner
         
         # Source intent.fish which will handle loading all other required modules
-        source $SCRIPT_DIR/soul/intent.fish
+        source (dirname (status --current-filename))/soul/intent.fish
         
         # Explicitly call main function from intent.fish (regular mode)
         main

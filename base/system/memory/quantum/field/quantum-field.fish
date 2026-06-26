@@ -1,13 +1,13 @@
 #!/usr/bin/env fish
 #
-# Copyright (c) 2025 Napol Thanarangkaun (napol@noesis.run)
+# Copyright (c) Napol Thanarangkaun
 # Licensed under Noesis License - See LICENSE file for details
 #
 
 # quantum_field.fish - Quantum field theory simulation (simplified)
 
 # Source the quantum core
-source system/memory/quantum/unit.fish
+source (dirname (dirname (dirname (status --current-filename))))/unit.fish
 
 # Constants for field simulation
 set -g FIELD_SIZE 10

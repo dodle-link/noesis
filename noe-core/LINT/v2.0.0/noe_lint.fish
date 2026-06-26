@@ -1,7 +1,7 @@
 #!/usr/bin/env fish
 
 # noe_lint.fish
-# Copyright (c) 2025 Napol Thanarangkaun (napol@noesis.run). All rights reserved.
+# Copyright (c) Napol Thanarangkaun. All rights reserved.
 # Licensed under the Noesis License.
 #
 # A specialized linter for Noesis Object Encoding (.noe) files

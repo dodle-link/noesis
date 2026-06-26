@@ -1,6 +1,6 @@
 #!/usr/bin/env fish
 #
-# Copyright (c) 2025 Napol Thanarangkaun (napol@noesis.run)
+# Copyright (c) Napol Thanarangkaun
 # Licensed under Noesis License - See LICENSE file for details
 #
 
@@ -25,19 +25,19 @@ set NC (set_color normal)
 
 # Source dependent modules - absolute minimum needed here since intent.fish is now central
 # Using the new system directory structure - no need to load utils files anymore
-source system/memory/unit.fish
-source system/perception/unit.fish
-source system/emotion/unit.fish
-source system/ai-model/unit.fish
-source system/control/intent-shell.fish
+source (dirname (dirname (status --current-filename)))/system/memory/unit.fish
+source (dirname (dirname (status --current-filename)))/system/perception/unit.fish
+source (dirname (dirname (status --current-filename)))/system/emotion/unit.fish
+source (dirname (dirname (status --current-filename)))/system/ai-model/unit.fish
+source (dirname (dirname (status --current-filename)))/system/control/intent-shell.fish
 
 # Source quantum modules directly from the system directory
-source system/memory/quantum/unit.fish
-source system/memory/quantum/compiler.fish
-source system/memory/quantum/backend-stub.fish
-source system/memory/quantum/backend-ibm.fish
-source system/memory/quantum/export-qasm.fish
-source system/memory/quantum/field/quantum-field.fish
+source (dirname (dirname (status --current-filename)))/system/memory/quantum/unit.fish
+source (dirname (dirname (status --current-filename)))/system/memory/quantum/compiler.fish
+source (dirname (dirname (status --current-filename)))/system/memory/quantum/backend-stub.fish
+source (dirname (dirname (status --current-filename)))/system/memory/quantum/backend-ibm.fish
+source (dirname (dirname (status --current-filename)))/system/memory/quantum/export-qasm.fish
+source (dirname (dirname (status --current-filename)))/system/memory/quantum/field/quantum-field.fish
 
 # Note: All color definitions, print_banner, log_with_timestamp, and handle_error functions
 # are now defined in run.fish
