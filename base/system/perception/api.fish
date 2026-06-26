@@ -7,11 +7,12 @@
 # noesis_api.fish - API implementation for Noesis
 
 # Source all required modules
-source /system/memory/unit.fish
-source /system/perception/unit.fish
-source /system/control/old_intent.fish
-source /system/emotion/unit.fish
-source /soul/intent.fish
+source (dirname (dirname (status --current-filename)))/memory/unit.fish
+source (dirname (status --current-filename))/unit.fish
+# Old intent.fish not available in current version - skipping
+# source (dirname (dirname (status --current-filename)))/control/old_intent.fish
+source (dirname (status --current-filename))/unit.fish
+source (dirname (dirname (dirname (status --current-filename))))/soul/intent.fish
 
 # API version
 set -g API_VERSION "2.1.2"

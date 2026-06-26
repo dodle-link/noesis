@@ -7,10 +7,9 @@
 # test_ai.fish - Test script for AI and consciousness integration
 
 # Source necessary modules
-# Need to change to the project root directory first
-set SCRIPT_DIR (dirname (status filename))
-cd $SCRIPT_DIR/../../
-source soul/intent.fish
+# Find the soul/intent.fish relative to this file location
+set SCRIPT_DIR (dirname (status --current-filename))
+source $SCRIPT_DIR/../../soul/intent.fish
 
 # Print a nice header
 function print_header

@@ -8,7 +8,7 @@
 # This file handles IBM Quantum Experience API integration
 
 # Source the quantum core
-source system/memory/quantum/unit.fish
+source (dirname (dirname (status --current-filename)))/unit.fish
 
 # Maximum qubits for IBM quantum computers
 set -g IBM_MAX_QUBITS 5
