@@ -9,11 +9,14 @@
 # Current version of Noesis
 set -g NOESIS_VERSION "2.2.0"
 
+# Get the directory where this script is located
+set -g SCRIPT_DIR (dirname (status filename))
+
 # Function to source all required modules when needed
 function load_modules
     # With the centralized intent.fish, we only need to source that file
     # as it will handle loading all other required modules
-    source soul/intent.fish
+    source $SCRIPT_DIR/soul/intent.fish
 end
 
 # Define colors for better readability
@@ -394,7 +397,7 @@ function noesis_main
         print_banner
         
         # Source intent.fish which will handle loading all other required modules
-        source soul/intent.fish
+        source $SCRIPT_DIR/soul/intent.fish
         
         # Explicitly call main function from intent.fish (regular mode)
         main
