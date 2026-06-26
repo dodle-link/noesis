@@ -9,6 +9,9 @@
 # Current version of Noesis
 set -g NOESIS_VERSION "2.2.0"
 
+# Get the directory where this script is located
+set -g SCRIPT_DIR (dirname (status filename))
+
 # Function to source all required modules when needed
 function load_modules
     # With the centralized intent.fish, we only need to source that file
