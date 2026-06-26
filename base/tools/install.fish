@@ -1,6 +1,6 @@
 #!/usr/bin/env fish
 #
-# Copyright (c) 2025 Napol Thanarangkaun (napol@noesis.run)
+# Copyright (c) 2025 Napol Thanarangkaun
 # Licensed under Noesis License - See LICENSE file for details
 #
 
@@ -99,7 +99,7 @@ echo '#!/usr/bin/env fish
 #
 # Noesis CLI Runner
 #
-# Copyright (c) 2025 Napol Thanarangkaun (napol@noesis.run)
+# Copyright (c) 2025 Napol Thanarangkaun
 # Licensed under Noesis License - See LICENSE file for details
 #
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env fish
 
 # examples.fish
-# Copyright (c) 2025 Napol Thanarangkaun (napol@noesis.run). All rights reserved.
+# Copyright (c) 2025 Napol Thanarangkaun. All rights reserved.
 # Licensed under the Noesis License.
 #
 # Examples of using the NOE parser and linter
