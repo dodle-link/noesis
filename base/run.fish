@@ -1,6 +1,6 @@
 #!/usr/bin/env fish
 #
-# Copyright (c) 2025 Napol Thanarangkaun
+# Copyright (c) Napol Thanarangkaun
 # Licensed under Noesis License - See LICENSE file for details
 #
 
@@ -128,7 +128,7 @@ end
 function show_version
     echo "Noesis v$NOESIS_VERSION"
     echo "Synthetic Conscious System"
-    echo "Copyright (c) 2025 Napol Thanarangkaun"
+    echo "Copyright (c) Napol Thanarangkaun"
     echo "Licensed under Noesis License - See LICENSE file for details"
     return 0
 end

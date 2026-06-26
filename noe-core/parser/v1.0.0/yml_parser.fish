@@ -1,7 +1,7 @@
 #!/usr/bin/env fish
 
 # yml_parser.fish
-# Copyright (c) 2025 Napol Thanarangkaun. All rights reserved.
+# Copyright (c) Napol Thanarangkaun. All rights reserved.
 # Licensed under the Noesis License.
 #
 # A prototype parser for YAML Markup Language (.yml) files
