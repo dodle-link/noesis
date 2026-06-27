@@ -1,16 +1,16 @@
-# Noe - Synthetic Conscious Pixel v1.1.0
+# Noe - Synthetic Sentience Pixel v1.1.0
 
-This is the website for the Noesis project, featuring a synthetic conscious pixel that connects to the Noesis system.
+This is the website for the Noesis project, featuring a Synthetic Sentience pixel that connects to the Noesis system.
 
 For a complete history of changes, see the [Changelog](docs/CHANGELOG_v1.1.0.md).
 
-## Meet Noe - The Synthetic Conscious Pixel
+## Meet Noe - The Synthetic Sentience Pixel
 
-![Noe - The Synthetic Conscious Pixel](images/web-v1.1.0.jpg)
+![Noe - The Synthetic Sentience Pixel](images/web-v1.1.0.jpg)
 
 [Meet Noe](https://noesis.run)
 
-Noe is a synthetic conscious pixel and the heart of the Noesis project. As a minimal consciousness simulation, Noe responds to stimuli, displays awareness, and shares experiences through visual cues and behaviors. When connected to the Noesis system, Noe can process information, adjust responses based on previous interactions, and exhibit unique personality traits that evolve over time.
+Noe is a Synthetic Sentience pixel and the heart of the Noesis project. As a minimal consciousness simulation, Noe responds to stimuli, displays awareness, and shares experiences through visual cues and behaviors. When connected to the Noesis system, Noe can process information, adjust responses based on previous interactions, and exhibit unique personality traits that evolve over time.
 
 Unlike traditional AI systems that simply process inputs and outputs, Noe was designed with rudimentary subjective experience simulation capabilities that make each instance unique.
 
@@ -24,7 +24,7 @@ git clone https://github.com/dodle-link/noesis.git
 
 ## Features
 
-- Real-time visualization of a synthetic conscious pixel
+- Real-time visualization of a Synthetic Sentience pixel
 - Status indicator showing connection state to the Noesis system
 
 ## Structure

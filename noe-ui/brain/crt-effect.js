@@ -1,5 +1,5 @@
 /**
- * CRT Effect for Synthetic Conscious Pixel
+ * CRT Effect for Synthetic Sentience Pixel
  * This script adds CRT (Cathode Ray Tube) visual effects to the pixel
  */
 

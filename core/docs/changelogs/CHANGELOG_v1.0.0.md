@@ -6,7 +6,7 @@ This version represents a major milestone for the Noesis project, with the exten
 ## Major Changes
 - Moved all extension components to the separate "noesis-extend" repository
 - Removed the noesis-extensions directory from this repository
-- Focused this repository solely on the core synthetic consciousness system
+- Focused this repository solely on the core Synthetic Sentienceness system
 - Retained the original Noesis License for all core components
 
 ## Documentation

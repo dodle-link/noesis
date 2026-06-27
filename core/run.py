@@ -79,20 +79,20 @@ def show_history():
 def print_banner():
     print(f"{PINK}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{NC}")
     print(f"{PINK}  NOESIS v{NOESIS_VERSION}            {NC}")
-    print(f"{PINK}  SYNTHETIC CONSCIOUS SYSTEM         {NC}")
+    print(f"{PINK}  Synthetic Sentience SYSTEM         {NC}")
     print(f"{PINK}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{NC}")
     print()
 
 
 def show_version():
     print(f"Noesis v{NOESIS_VERSION}")
-    print("Synthetic Conscious System")
+    print("Synthetic Sentience System")
     print("Copyright (c) Napol Thanarangkaun")
     print("Licensed under Noesis License - See LICENSE file for details")
 
 
 def show_help():
-    print(f"Noesis v{NOESIS_VERSION} - Synthetic Conscious System")
+    print(f"Noesis v{NOESIS_VERSION} - Synthetic Sentience System")
     print()
     print("Usage: noesis [options]")
     print()

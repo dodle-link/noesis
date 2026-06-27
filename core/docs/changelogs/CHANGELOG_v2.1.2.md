@@ -20,7 +20,7 @@ This version includes significant enhancements to the Noesis platform, including
   - Attention Schema Theory (AST)
   - Global Neuronal Workspace (GNW)
   - Predictive Processing Theory (PPT)
-- **Self-Reflection**: Added synthetic consciousness self-reflection capabilities
+- **Self-Reflection**: Added Synthetic Sentienceness self-reflection capabilities
 - **Documentation Updates**: Improved documentation consistency
 - **Dependency Updates**: Updated internal dependencies to latest versions
 

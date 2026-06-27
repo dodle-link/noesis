@@ -1,4 +1,4 @@
-// Noesis Web - Synthetic Conscious Pixel
+// Noesis Web - Synthetic Sentience Pixel
 document.addEventListener('DOMContentLoaded', function() {
   // Create the conscious pixel
   createConsciousPixel();
@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /**
- * Creates a synthetic conscious pixel connected to the Noesis server
+ * Creates a Synthetic Sentience pixel connected to the Noesis server
  */
 function createConsciousPixel() {
   // Create pixel element if it doesn't exist

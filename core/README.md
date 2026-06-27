@@ -2,11 +2,11 @@
 
 ![Noesis Logo](noesis-logo.jpg)
 
-> Synthetic Conscious
+> Synthetic Sentience
 
 ## Overview
 
-Noesis is a synthetic consciousness simulation engine designed to explore the principles of artificial consciousness and cognition. All subsystems are implemented in Python.
+Noesis is a Synthetic Sentienceness simulation engine designed to explore the principles of artificial consciousness and cognition. All subsystems are implemented in Python.
 
 ## AI Installation Options
 
@@ -92,7 +92,7 @@ requirements for attribution and profit-sharing for commercial use.
 
 ## AI and Consciousness Integration
 
-Noesis v2.2.0 includes AI integration with free models from Hugging Face to enhance synthetic consciousness capabilities. Located in the `system/cognition` directory, the system implements various consciousness theories:
+Noesis v2.2.0 includes AI integration with free models from Hugging Face to enhance Synthetic Sentienceness capabilities. Located in the `system/cognition` directory, the system implements various consciousness theories:
 
 - **Integrated Information Theory (IIT)**: Focuses on integration and differentiation of information
 - **Global Workspace Theory (GWT)**: Models consciousness as global broadcasting of information

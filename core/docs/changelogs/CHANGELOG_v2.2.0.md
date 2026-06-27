@@ -22,7 +22,7 @@ This major update to Noesis introduces comprehensive AI integration and advanced
   - Global Neuronal Workspace (GNW) - Dehaene's neuronal implementation
   - Predictive Processing Theory (PPT) - Clark/Friston's predictive approach
 
-- **Advanced Self-Reflection**: Synthetic consciousness self-reflection capabilities
+- **Advanced Self-Reflection**: Synthetic Sentienceness self-reflection capabilities
   - Model-specific reflection mechanisms
   - Configurable consciousness levels (0-5)
   - Temporal integration of experience

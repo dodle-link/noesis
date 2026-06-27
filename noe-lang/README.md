@@ -4,7 +4,7 @@
 **Current Version:** 2.0.0
 
 ## Introduction
-Noe-lang is the reference implementation for the Noesis Object Encoding (.noe) format, a domain-specific language designed to represent quantum-aware synthetic consciousness structures such as emotion, memory, and intent in a state-driven and entangled manner.
+Noe-lang is the reference implementation for the Noesis Object Encoding (.noe) format, a domain-specific language designed to represent quantum-aware Synthetic Sentienceness structures such as emotion, memory, and intent in a state-driven and entangled manner.
 
 Noesis Object Encoding follows semantic versioning (MAJOR.MINOR.PATCH):
 - **MAJOR** version for incompatible format changes

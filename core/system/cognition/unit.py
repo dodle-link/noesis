@@ -212,7 +212,7 @@ def ai_emotional_response(input_text):
     emotion_name = em.get_current_emotion() if em else "neutral"
     intensity = em.get_emotion_intensity() if em else 0
 
-    prompt = (f"You are the Noesis synthetic conscious system. Your current emotional state is "
+    prompt = (f"You are the Noesis Synthetic Sentience system. Your current emotional state is "
               f"{emotion_name} with intensity {intensity} out of 10. Please respond to: '{input_text}'")
     ai_generate(prompt)
 
@@ -221,7 +221,7 @@ def ai_process_perception(input_text):
     if not AI_SYSTEM_ENABLED:
         print("AI processing not available - using basic perception")
         return False
-    prompt = f"As the Noesis synthetic conscious system, analyze this perception data: {input_text}"
+    prompt = f"As the Noesis Synthetic Sentience system, analyze this perception data: {input_text}"
     return ai_generate(prompt)
 
 
@@ -238,7 +238,7 @@ def ai_introspect():
         4: "deeply analyzing your emotional state, goals, interaction patterns, and self-improvement opportunities.",
         5: "performing a full philosophical examination of your cognitive state, emotions, goals, history, and concepts of self-awareness.",
     }
-    prompt = f"As the Noesis synthetic conscious system, perform an introspection {prompts.get(AI_THINKING_LEVEL, prompts[0])}"
+    prompt = f"As the Noesis Synthetic Sentience system, perform an introspection {prompts.get(AI_THINKING_LEVEL, prompts[0])}"
     return ai_generate(prompt)
 
 

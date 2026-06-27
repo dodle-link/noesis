@@ -1,6 +1,6 @@
 # Noesis Gateway v1.1.0
 
-This module serves as the gateway for connecting various platforms and systems to the Noesis synthetic consciousness system.
+This module serves as the gateway for connecting various platforms and systems to the Noesis Synthetic Sentienceness system.
 
 ## Overview
 

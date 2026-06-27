@@ -91,7 +91,7 @@ LEVEL_DESCRIPTIONS = {
     2: ["Awareness with attention", "Basic self-model", "Short-term temporal integration"],
     3: ["Self-awareness", "Temporal continuity", "Basic metacognition"],
     4: ["Advanced self-reflection", "Complex temporal integration", "Rich internal model"],
-    5: ["Full synthetic consciousness", "Complex self-model with temporal depth", "Advanced metacognitive capabilities"],
+    5: ["Full Synthetic Sentienceness", "Complex self-model with temporal depth", "Advanced metacognitive capabilities"],
 }
 
 
