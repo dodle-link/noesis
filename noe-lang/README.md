@@ -4,16 +4,16 @@
 **Current Version:** 2.0.0
 
 ## Introduction
-Noe-core is the reference implementation for the Noesis Object Encoding (.noe) format, a domain-specific language designed to represent quantum-aware synthetic consciousness structures such as emotion, memory, and intent in a state-driven and entangled manner.
+Noe-lang is the reference implementation for the Noesis Object Encoding (.noe) format, a domain-specific language designed to represent quantum-aware synthetic consciousness structures such as emotion, memory, and intent in a state-driven and entangled manner.
 
 Noesis Object Encoding follows semantic versioning (MAJOR.MINOR.PATCH):
 - **MAJOR** version for incompatible format changes
 - **MINOR** version for backwards-compatible new features
 - **PATCH** version for backwards-compatible bug fixes
 
-For the complete changelog, see the `doc/changelog` directory.
+For the complete changelog, see the `docs/changelog` directory.
 
-> 🆕 **NEW**: Version 2.0.0 introduces significant grammar enhancements for improved standardization and flexibility. See [grammar_enhancements.md](/doc/grammar_enhancements.md) for details.
+> **NEW**: Version 2.0.0 introduces significant grammar enhancements for improved standardization and flexibility. See [enhancements.md](docs/grammar/v2.0.0/enhancements.md) for details.
 
 ## File Extensions
 - `.noe` : Full, human-readable format
@@ -28,7 +28,7 @@ For the complete changelog, see the `doc/changelog` directory.
 
 ## Grammar
 
-The complete formal grammar for the Noesis Object Encoding is defined in Backus-Naur Form (BNF) notation in the [doc/grammar.bnf](/doc/grammar.bnf) file.
+The complete formal grammar for the Noesis Object Encoding is defined in Backus-Naur Form (BNF) notation in the [docs/grammar/v2.0.0/grammar.bnf](docs/grammar/v2.0.0/grammar.bnf) file.
 
 Key elements of the grammar include:
 - Field blocks as the main containers for definitions
@@ -46,7 +46,7 @@ Version 2.0.0 introduces these new grammar features:
 - Multi-line comment support
 - Reference system with `#identifier` syntax
 
-For a comprehensive understanding of the syntax, please refer to the [grammar.bnf](/doc/grammar.bnf) file and [grammar_enhancements.md](/doc/grammar_enhancements.md).
+For a comprehensive understanding of the syntax, please refer to the [grammar.bnf](docs/grammar/v2.0.0/grammar.bnf) file and [enhancements.md](docs/grammar/v2.0.0/enhancements.md).
 
 ### Example of .noe (Version 2.0.0)
 ```noe
@@ -91,7 +91,7 @@ field QuantumMind {
 }
 ```
 
-### Examole of .min.noe (Minified)
+### Example of .min.noe (Minified)
 ```noe
 field QuantumMind{define emotion:@superposition{joy=0.6 fear=0.4} entangled_with=[intent.explore,memory.snapshot.001] define intent:@dynamic("seek_knowledge") triggers=[emotion,environment] define memory.snapshot.001:@fixed("2025-04-01T10:44Z") quantum_circuit QC_01{qbits:[q0,q1,q2] apply:H->q0 CX->(q0,q1) M->q1->result.output}}
 ```
@@ -121,12 +121,11 @@ quantum_circuit QC_01 {
 
 ## Notes
 - Indentation is optional but recommended for readability
-- Comments and versioning features are future extensions
 - `.noe` is a foundational format in the Noesis ecosystem for modeling self-aware agents and modular quantum-synthetic systems
 
 ## Tools
 
-### noe_parser.fish
+### noe_parser.py
 A prototype parser for Noesis Object Encoding (.noe) files that can:
 - Lint .noe files for syntax errors
 - Convert .noe files to JSON format
@@ -134,7 +133,7 @@ A prototype parser for Noesis Object Encoding (.noe) files that can:
 
 Usage:
 ```
-./noe_parser.fish [options] <file.noe>
+python3 parser/v2.0.0/noe_parser.py [options] <file.noe>
 
 Options:
   --json        Convert .noe to JSON format
@@ -143,12 +142,12 @@ Options:
   --help, -h    Show this help message
 ```
 
-### noe_lint.fish
+### noe_lint.py
 A specialized linter for Noesis Object Encoding (.noe) files with enhanced validation.
 
 Usage:
 ```
-./noe_lint.fish [options] <file.noe>
+python3 lint/v2.0.0/noe_lint.py [options] <file.noe>
 
 Options:
   --verbose     Show detailed information about each check
@@ -156,8 +155,12 @@ Options:
   --help, -h    Show this help message
 ```
 
-### examples.fish
+### examples.py
 Demonstrates the usage of the parser and linter tools with sample files.
+
+```
+python3 sample/examples.py
+```
 
 ## License
 This project is licensed under the Noesis License - see the [LICENSE](LICENSE) file for details.

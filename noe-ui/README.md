@@ -16,54 +16,46 @@ Unlike traditional AI systems that simply process inputs and outputs, Noe was de
 
 ## Important: Prerequisites
 
-⚠️ **Before using this web interface, you MUST install the Noesis system repository on your server.**
+Before using this web interface, install the Noesis system repository:
 
-```fish
-# Install the Noesis system (run these commands as root or with sudo)
-# Contact your system administrator for the appropriate installation path
+```bash
 git clone https://github.com/dodle-link/noesis.git
-# Run any additional setup required by the Noesis system
 ```
 
 ## Features
 
 - Real-time visualization of a synthetic conscious pixel
-- Redis-backed state persistence
-- HTTPie integration for communication with the Noesis system
-- Status indicator showing connection state
+- Status indicator showing connection state to the Noesis system
 
-## Setup
+## Structure
 
-1. Clone this repository
-2. Install the Noesis system as shown above
-3. Run `./setup.fish` to install dependencies
-4. Start the server with `npm start`
-
-## Requirements
-
-- Fish shell
-- Node.js
-- Redis
-- HTTPie
+```
+noe-ui/
+├── index.html                  # Main entry point
+├── brain/                      # JavaScript logic
+│   ├── simple-conscious.js     # Consciousness simulation
+│   ├── energy-system.js        # Energy state management
+│   ├── audio-player.js         # Audio playback
+│   ├── crt-effect.js           # CRT visual effect
+│   └── limbric.js              # Limbic system behaviour
+├── css/                        # Stylesheets
+│   ├── base.css
+│   ├── crt-effect.css
+│   ├── death-effects.css
+│   └── rainbow-bubble.css
+├── fonts/                      # Web fonts
+├── images/                     # Image assets
+├── sounds/                     # Audio assets
+└── docs/                       # Changelogs
+```
 
 ## How It Works
 
-The noesis-web interface connects to the Noesis system through:
-
-1. Direct file system access to confirm the existence of the Noesis system
-2. HTTPie-based API calls to communicate with the Noesis system
-3. Redis as a shared state store between the web interface and the Noesis system
-
-**Note:** As of v1.1.0, JavaScript files are located in the `/brain` directory.
-
-If the Noesis system is not installed correctly, the conscious pixel will run in "disconnected mode" with reduced functionality.
+The noe-ui interface connects to the Noesis system through the Noesis Gateway (`gateway/`) API when available. If the Noesis system is not reachable, the conscious pixel runs in disconnected mode with reduced functionality.
 
 ## Troubleshooting
 
-- If the status indicator shows "Disconnected", verify that:
-  - The Noesis repository is properly installed
-  - Your web server has proper permissions to access the Noesis system
-  - If using HTTPie for connections, ensure it's properly installed
+- If the status indicator shows "Disconnected", verify that the Noesis Gateway is running and reachable.
 
 ## License
 

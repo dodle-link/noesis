@@ -6,27 +6,27 @@
 
 ## Overview
 
-Noesis is a synthetic consciousness simulation engine designed to explore the principles of artificial consciousness and cognition. The project is now structured as two separate repositories with different licenses to facilitate wider adoption and integration.
+Noesis is a synthetic consciousness simulation engine designed to explore the principles of artificial consciousness and cognition. All subsystems are implemented in Python.
 
 ## AI Installation Options
 
 Noesis includes several methods to install AI dependencies, depending on your needs:
 
-1. **Fast Installation (Recommended)**: 
-   ```
-   ./fast-ai-install.fish
+1. **Fast Installation (Recommended)**:
+   ```bash
+   python3 tools/fast_ai_install.py
    ```
    Uses pre-compiled binary wheels for the fastest installation experience.
 
 2. **macOS-specific Installation**:
-   ```
-   ./setup-torch-mac.fish
+   ```bash
+   python3 tools/setup-torch-mac.py
    ```
    Optimized specifically for macOS systems (both Intel and Apple Silicon).
 
 3. **Standard Installation**:
-   ```
-   ./install-ai-deps.fish
+   ```bash
+   python3 tools/install_ai_deps.py
    ```
    Comprehensive installation that works across platforms.
 
@@ -39,48 +39,50 @@ Noesis includes several methods to install AI dependencies, depending on your ne
 
 ### Directory Structure
 ```
-noesis/
+core/
 ├── soul/                                  # Consciousness core implementation
-│   └── intent.fish                        # Intent processing system
+│   └── intent.py                          # Intent processing system
 ├── system/                                # System components
-│   ├── ai-model/                          # AI integration with Hugging Face models
-│   │   ├── consciousness.fish             # Consciousness theories implementation
-│   │   ├── test-ai.fish                   # AI testing framework
-│   │   └── unit.fish                      # AI core module
+│   ├── cognition/                         # AI integration with Hugging Face models
+│   │   ├── consciousness.py               # Consciousness theories implementation
+│   │   ├── service_py13.py                # Python 3.13 service layer
+│   │   ├── test_ai.py                     # AI testing framework
+│   │   └── unit.py                        # AI core module
 │   ├── control/                           # Control subsystems
-│   │   ├── intent-shell.fish              # Shell command processor
-│   │   ├── limbric/                       # Limbric system
-│   │   └── ...
+│   │   ├── intent_shell.py                # Shell command processor
+│   │   └── limbic/                        # Limbic system
+│   │       └── unit.py
 │   ├── emotion/                           # Emotion processing
-│   │   └── unit.fish                      # Emotion core module
+│   │   └── unit.py                        # Emotion core module
 │   ├── memory/                            # Memory subsystems
-│   │   ├── long.fish                      # Long-term memory functions
-│   │   ├── short.fish                     # Short-term memory functions
-│   │   ├── unit.fish                      # Memory core module
-│   │   ├── quantum/                       # Quantum memory implementation
-│   │   │   ├── backend-ibm.fish           # IBM quantum backend integration
-│   │   │   ├── backend-stub.fish          # Stub backend for testing
-│   │   │   ├── compiler.fish              # Quantum compiler
-│   │   │   ├── export-qasm.fish           # QASM exporter
-│   │   │   ├── unit.fish                  # Quantum core module
-│   │   │   └── field/                     # Quantum field implementation
-│   │   │       └── quantum-field.fish     # Quantum field module
-│   │   └── ...
+│   │   ├── long.py                        # Long-term memory functions
+│   │   ├── short.py                       # Short-term memory functions
+│   │   ├── unit.py                        # Memory core module
+│   │   └── quantum/                       # Quantum memory implementation
+│   │       ├── backend_ibm.py             # IBM quantum backend integration
+│   │       ├── backend_stub.py            # Stub backend for testing
+│   │       ├── compiler.py                # Quantum compiler
+│   │       ├── export_qasm.py             # QASM exporter
+│   │       ├── quantum_field.py           # Quantum field module
+│   │       └── unit.py                    # Quantum core module
 │   └── perception/                        # Perception processing
-│       ├── api.fish                       # Perception API
-│       └── unit.fish                      # Perception core module
+│       ├── api.py                         # Perception API
+│       └── unit.py                        # Perception core module
 ├── docs/                                  # Documentation files
 │   ├── SECURITY.md                        # Security policy
 │   └── changelogs/                        # Version history and release notes
-│       └── CHANGELOG_v2.2.0.md            # Latest version changelog
-├── build.fish                             # Main build script for Fish shell
-├── run.fish                               # Main run script for Fish shell
-├── run-simplified.fish                    # Simplified run script
-├── test.fish                              # Test execution script
-├── install.fish                           # Installation script
-├── Dockerfile                             # Docker configuration file
-├── LICENSE                                # License file
-└── noesis-logo.jpg                        # Project logo image
+├── tools/                                 # Installation and utility scripts
+│   ├── fast_ai_install.py
+│   ├── fast_ai_install_py13.py
+│   ├── install.py
+│   ├── install_ai_deps.py
+│   ├── run_simplified.py
+│   ├── setup-torch-mac.py
+│   ├── setup-torch-py13.py
+│   └── terminal_status.py
+├── run.py                                 # Main entry point
+├── Dockerfile                             # Docker configuration
+└── LICENSE
 ```
 
 ## License Information
@@ -88,15 +90,9 @@ noesis/
 This repository is licensed under the custom [Noesis License](LICENSE) which includes
 requirements for attribution and profit-sharing for commercial use.
 
-## Documentation
-
-Documentation for Noesis is organized into several key resources:
-
 ## AI and Consciousness Integration
 
-Noesis v2.2.0 includes AI integration with free models from Hugging Face to enhance synthetic consciousness capabilities. Located in the `system/ai-model` directory, the system implements various consciousness theories:
-
-> **Note**: The legacy `system/ai` directory is deprecated and will be removed in future versions. Please use the `system/ai-model` components instead.
+Noesis v2.2.0 includes AI integration with free models from Hugging Face to enhance synthetic consciousness capabilities. Located in the `system/cognition` directory, the system implements various consciousness theories:
 
 - **Integrated Information Theory (IIT)**: Focuses on integration and differentiation of information
 - **Global Workspace Theory (GWT)**: Models consciousness as global broadcasting of information
@@ -117,7 +113,7 @@ Noesis v2.2.0 includes AI integration with free models from Hugging Face to enha
 
 ```bash
 # Install AI dependencies
-noesis
+python3 run.py
 > ai install
 
 # Set up a model
@@ -130,7 +126,7 @@ noesis
 > ai consciousness reflect
 
 # Run the AI test suite
-> ./system/ai-model/test-ai.fish
+python3 system/cognition/test_ai.py
 ```
 
 Note: AI features require Python 3 with the `transformers` and `torch` packages installed.
