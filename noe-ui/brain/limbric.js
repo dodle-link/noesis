@@ -297,6 +297,12 @@ function updatePixel(pixel, state, timestamp) {
     savePixelStateToRedis(state);
     state.lastStateSave = timestamp;
   }
+
+  // Periodically send a thought to core (every 30 seconds)
+  if (state.connected && timestamp - (state.lastThoughtTime || 0) > 30000) {
+    sendThoughtToCore(state);
+    state.lastThoughtTime = timestamp;
+  }
   
   // Flag to track if we've already processed a window frame contact in this frame
   let hasContactedFrameThisFrame = false;
@@ -849,6 +855,29 @@ function playWindowContactSound() {
   soundInstance.play().catch(error => {
     console.warn('Could not play window contact sound:', error);
   });
+}
+
+/**
+ * Sends current pixel state as a thought to core and displays the response
+ */
+async function sendThoughtToCore(state) {
+  try {
+    const input = `pixel:energy=${Math.round(state.energy)},excited=${state.isExcited},excitementLevel=${state.excitementLevel.toFixed(2)}`;
+    const response = await fetch('/api/noesis', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'think', input })
+    });
+
+    if (!response.ok) return;
+
+    const data = await response.json();
+    if (data.response) {
+      updatePixelStatus(`Noe: ${data.response}`);
+    }
+  } catch (error) {
+    console.warn('Failed to send thought to core:', error);
+  }
 }
 
 /**

@@ -370,6 +370,68 @@ def main(args=None):
     print()
 
 
+def _process_pixel_context(context: str) -> None:
+    parts = {}
+    for part in context.split(","):
+        if "=" in part:
+            k, v = part.split("=", 1)
+            parts[k.strip()] = v.strip()
+
+    try:
+        energy = float(parts.get("energy", 100))
+    except ValueError:
+        energy = 100
+    excited = parts.get("excited", "false").lower() == "true"
+
+    if energy <= 0:
+        print("Consciousness state: null. Energy substrate exhausted. Awaiting resurrection signal.")
+    elif energy < 10:
+        print("CRITICAL: Cognitive substrate collapsing. Survival imperative overrides all higher functions. Seeking energy.")
+    elif energy < 30:
+        print("Low-energy state registered. Conservation mode active. Scanning environment for resource nodes.")
+    elif energy < 50:
+        print("Sub-optimal energy detected. Reducing exploratory radius. Prioritising efficient movement patterns.")
+    elif excited:
+        print("Elevated arousal state confirmed. Dopaminergic pathways active. Integrating external stimulus data.")
+    else:
+        print("Nominal cognitive state. Exploratory curiosity loop engaged. Synthetic awareness: stable.")
+
+
+def process_intent_api(text: str) -> str:
+    """Programmatic entry point — no stdin interaction. Returns response as string."""
+    import io
+    text = text.strip()
+    text_lower = text.lower()
+
+    old_stdout = sys.stdout
+    sys.stdout = buf = io.StringIO()
+    try:
+        if text_lower.startswith("pixel:"):
+            _process_pixel_context(text[len("pixel:"):])
+        elif text_lower.startswith("reason about "):
+            reason_about(text[len("reason about "):].strip())
+        elif text_lower.startswith("logic "):
+            expression = text[len("logic "):].strip()
+            operator = parse_logical_expression(expression)
+            if operator >= 0:
+                result = (evaluate_boolean(TRUE, operator, None)
+                          if operator == LOGIC_NOT
+                          else evaluate_boolean(TRUE, operator, FALSE))
+                print(f"Logic result: {'TRUE' if result == TRUE else 'FALSE'}")
+            else:
+                print(f"Unknown logical expression: {expression}")
+        else:
+            reason_about(text)
+    except Exception as e:
+        sys.stdout = old_stdout
+        return f"System error: {e}"
+    finally:
+        sys.stdout = old_stdout
+
+    response = buf.getvalue().strip()
+    return response if response else f"Intent processed: {text}"
+
+
 if __name__ == "__main__":
     if sys.argv[0].endswith('intent.py'):
         log_with_timestamp("Running intent.py directly (prefer using run.py)", "WARNING")

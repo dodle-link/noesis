@@ -4,10 +4,22 @@ import sys
 import json
 import re
 import subprocess
+import importlib.util
 from http.server import BaseHTTPRequestHandler
 
 UPLOAD_DIR = os.path.join(os.getcwd(), "temp", "uploads")
 NOE_CORE_PATH = os.path.join(os.getcwd(), "..", "noe-core")
+
+_INTENT_MODULE_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "core", "soul", "intent.py"
+)
+
+
+def _load_intent_module():
+    spec = importlib.util.spec_from_file_location("noesis_intent", _INTENT_MODULE_PATH)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def send_response(status, body):
@@ -23,7 +35,36 @@ def send_response(status, body):
 def handle_request(method, path, body="", headers=None):
     route = f"{method} {path}"
 
-    if route == "GET /api/noe/status":
+    if path == "/api/noesis" and method == "POST":
+        try:
+            data = json.loads(body) if body else {}
+        except (json.JSONDecodeError, ValueError):
+            data = {}
+
+        action = data.get("action", "")
+
+        if action == "getVersion":
+            send_response("200 OK", json.dumps({"version": "2.2.0", "status": "online"}))
+
+        elif action == "updateState":
+            send_response("200 OK", json.dumps({"status": "saved"}))
+
+        elif action == "think":
+            input_text = data.get("input", "").strip()
+            if not input_text:
+                send_response("400 Bad Request", json.dumps({"error": "input is required for think action"}))
+                return
+            try:
+                intent_mod = _load_intent_module()
+                response_text = intent_mod.process_intent_api(input_text)
+                send_response("200 OK", json.dumps({"response": response_text, "status": "processed"}))
+            except Exception as e:
+                send_response("500 Internal Server Error", json.dumps({"error": str(e)}))
+
+        else:
+            send_response("400 Bad Request", json.dumps({"error": f"Unknown action: {action}"}))
+
+    elif route == "GET /api/noe/status":
         if os.path.isdir(NOE_CORE_PATH):
             send_response("200 OK", json.dumps({"status": "connected", "path": NOE_CORE_PATH}))
         else:
