@@ -4,6 +4,24 @@
 
 import time
 import random
+import importlib.util
+import os
+
+_state_io = None
+
+
+def _get_state_io():
+    global _state_io
+    if _state_io:
+        return _state_io
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "noe", "state_io.py")
+    if not os.path.isfile(path):
+        return None
+    spec = importlib.util.spec_from_file_location("state_io", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    _state_io = mod
+    return mod
 
 CONSCIOUSNESS_MODEL = "IIT"
 CONSCIOUSNESS_LEVEL = 3
@@ -46,6 +64,15 @@ def init_consciousness():
     CONSCIOUSNESS_LEVEL = 3
     SELF_REFLECTION_INTERVAL = 300
     LAST_REFLECTION_TIME = int(time.time())
+
+    sio = _get_state_io()
+    if sio:
+        state = sio.load_noe_state(sio.state_file("consciousness"))
+        if state:
+            CONSCIOUSNESS_MODEL = state.get("model", CONSCIOUSNESS_MODEL)
+            CONSCIOUSNESS_LEVEL = int(state.get("level", CONSCIOUSNESS_LEVEL))
+            SELF_REFLECTION_INTERVAL = int(state.get("reflection_interval", SELF_REFLECTION_INTERVAL))
+
     print(f"Consciousness module initialized with model: {CONSCIOUSNESS_MODEL}")
 
 
@@ -61,6 +88,12 @@ def set_consciousness_model(model):
     CONSCIOUSNESS_MODEL = model
     print(f"Consciousness model set to: {model}")
     describe_consciousness_model(model)
+    sio = _get_state_io()
+    if sio:
+        sio.save_noe_state(sio.state_file("consciousness"), "ConsciousnessState", {
+            "model": CONSCIOUSNESS_MODEL, "level": CONSCIOUSNESS_LEVEL,
+            "reflection_interval": SELF_REFLECTION_INTERVAL,
+        })
     return True
 
 
@@ -114,6 +147,12 @@ def set_consciousness_level(level):
     print(f"Level {level} consciousness implies:")
     for line in LEVEL_DESCRIPTIONS.get(level, []):
         print(f"- {line}")
+    sio = _get_state_io()
+    if sio:
+        sio.save_noe_state(sio.state_file("consciousness"), "ConsciousnessState", {
+            "model": CONSCIOUSNESS_MODEL, "level": CONSCIOUSNESS_LEVEL,
+            "reflection_interval": SELF_REFLECTION_INTERVAL,
+        })
     return True
 
 

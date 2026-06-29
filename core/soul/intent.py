@@ -176,6 +176,7 @@ def _show_help():
     print(f"{PURPLE}== System Commands =={NC}")
     print(f"  {GREEN}- quantum:{NC}             Enter quantum processing mode")
     print(f"  {GREEN}- ai:{NC}                  Access AI and consciousness features")
+    print(f"  {GREEN}- noe:{NC}                 Load, lint, save and restore .noe state files")
 
 
 def _show_status(history_count):
@@ -222,6 +223,16 @@ def process_intention(intention, history, add_to_history_fn):
             ai_mod = _load_module("system/cognition/unit.py")
             ish.handle_intent_command(ai_intent, params, ai_module=ai_mod)
         log_with_timestamp("AI operation completed", "INFO")
+    elif intention_lower.startswith("noe"):
+        log_with_timestamp("Accessing NOE features", "INFO")
+        nsh = _load_module("system/control/noe_shell.py")
+        if nsh and hasattr(nsh, 'handle_noe_command'):
+            params_str = intention[3:].strip() if len(intention) > 3 else ""
+            params = params_str.split() if params_str else []
+            consciousness_mod = _load_module("system/cognition/consciousness.py")
+            emotion_mod = _load_module("system/emotion/unit.py")
+            nsh.handle_noe_command(params, modules={"consciousness": consciousness_mod, "emotion": emotion_mod})
+        log_with_timestamp("NOE operation completed", "INFO")
     elif intention_lower.startswith("reason about "):
         problem = intention[len("reason about "):].strip()
         reason_about(problem)

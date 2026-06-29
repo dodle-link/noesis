@@ -2,6 +2,25 @@
 # Copyright (c) Napol Thanarangkaun
 # Licensed under Noesis License - See LICENSE file for details
 
+import importlib.util
+import os
+
+_state_io = None
+
+
+def _get_state_io():
+    global _state_io
+    if _state_io:
+        return _state_io
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "noe", "state_io.py")
+    if not os.path.isfile(path):
+        return None
+    spec = importlib.util.spec_from_file_location("state_io", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    _state_io = mod
+    return mod
+
 EMOTION_NEUTRAL = 0
 EMOTION_HAPPY = 1
 EMOTION_SAD = 2
@@ -34,6 +53,14 @@ def init_emotion_system():
     global current_emotion, emotion_intensity
     current_emotion = EMOTION_NEUTRAL
     emotion_intensity = 0
+
+    sio = _get_state_io()
+    if sio:
+        state = sio.load_noe_state(sio.state_file("emotion"))
+        if state:
+            current_emotion = int(state.get("emotion", EMOTION_NEUTRAL))
+            emotion_intensity = int(state.get("intensity", 0))
+
     print("Emotion system initialized")
 
 
@@ -45,6 +72,11 @@ def set_emotion(emotion, intensity=5):
     current_emotion = emotion
     emotion_intensity = intensity
     print(f"Emotion changed: {emotion_to_string(emotion)} (intensity: {intensity})")
+    sio = _get_state_io()
+    if sio:
+        sio.save_noe_state(sio.state_file("emotion"), "EmotionState", {
+            "emotion": current_emotion, "intensity": emotion_intensity,
+        })
     return True
 
 
