@@ -147,7 +147,7 @@ def initialize_systems():
 
     init_intent_system()
 
-    ai = _load_module("system/ai-model/unit.py")
+    ai = _load_module("system/cognition/unit.py")
     if ai and hasattr(ai, 'init_ai_system'):
         ai.init_ai_system()
 
@@ -217,8 +217,10 @@ def process_intention(intention, history, add_to_history_fn):
         ish = _load_module("system/control/intent_shell.py")
         if ish and hasattr(ish, 'parse_command_for_intent') and hasattr(ish, 'handle_intent_command'):
             ai_intent = ish.parse_command_for_intent(intention)
-            params = intention[2:].strip() if len(intention) > 2 else ""
-            ish.handle_intent_command(ai_intent, params)
+            params_str = intention[2:].strip() if len(intention) > 2 else ""
+            params = params_str.split() if params_str else []
+            ai_mod = _load_module("system/cognition/unit.py")
+            ish.handle_intent_command(ai_intent, params, ai_module=ai_mod)
         log_with_timestamp("AI operation completed", "INFO")
     elif intention_lower.startswith("reason about "):
         problem = intention[len("reason about "):].strip()
