@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Noe's Energy Surge - Synthetic Sentience Arcade</title>
+  <link rel="icon" href="../favicon.ico" />
+  <link rel="stylesheet" href="game.css" />
+</head>
+<body>
+
+  <!-- Top Header Navigation & Settings -->
+  <header class="game-header">
+    <div class="brand-section">
+      <a href="../index.html" class="back-link" title="Return to Noe UI">
+        &larr; Exit to Noe
+      </a>
+      <h1 class="game-title">NOE'S ENERGY SURGE</h1>
+    </div>
+
+    <div class="toggles-group">
+      <label class="toggle-item" title="Toggle 8-bit Background Music">
+        <span>Music</span>
+        <span class="toggle-switch">
+          <input type="checkbox" id="music-toggle" checked />
+          <span class="slider"></span>
+        </span>
+      </label>
+
+      <label class="toggle-item" title="Toggle Sound Effects">
+        <span>SFX</span>
+        <span class="toggle-switch">
+          <input type="checkbox" id="sfx-toggle" checked />
+          <span class="slider"></span>
+        </span>
+      </label>
+
+      <label class="toggle-item" title="Toggle CRT Scanline Effect">
+        <span>CRT Effect</span>
+        <span class="toggle-switch">
+          <input type="checkbox" id="crt-toggle" checked />
+          <span class="slider"></span>
+        </span>
+      </label>
+    </div>
+  </header>
+
+  <!-- Arcade CRT Cabinet Viewport -->
+  <main class="crt-cabinet">
+    <!-- Heads-Up Display Bar -->
+    <div class="hud-bar">
+      <div class="hud-item">
+        <span class="hud-label">Energy Level</span>
+        <div class="energy-container">
+          <div id="energy-fill" class="energy-fill" style="width: 100%;"></div>
+        </div>
+      </div>
+
+      <div class="hud-item">
+        <span class="hud-label">Sentience Score</span>
+        <span id="score-val" class="hud-value">0</span>
+      </div>
+
+      <div class="hud-item">
+        <span class="hud-label">High Score</span>
+        <span id="highscore-val" class="hud-value">0</span>
+      </div>
+
+      <div class="hud-item">
+        <span class="hud-label">Wave Level</span>
+        <span id="wave-val" class="hud-value">1</span>
+      </div>
+    </div>
+
+    <!-- Canvas Game Field -->
+    <div class="viewport-wrapper">
+      <canvas id="game-canvas"></canvas>
+
+      <!-- CRT Screen Overlays -->
+      <div id="crt-overlay" class="crt-overlay scanlines vignette crt-flicker-overlay"></div>
+
+      <!-- Start Game Modal Screen -->
+      <div id="start-modal" class="modal-screen">
+        <h2 class="modal-title">SYNTHETIC SURVIVAL</h2>
+        <p class="modal-subtitle">
+          Keep Noe's synthetic consciousness alive! Collect green <b>Energy Cubes</b> to charge Noe, grab rare <b>Rainbow Power-ups</b>, and avoid red <b>Entropy Glitches</b> that drain Noe's energy!
+        </p>
+        <button id="start-btn" class="btn-primary">INITIALIZE NOE</button>
+        <div class="controls-hint">
+          <span><span class="key-badge">WASD</span> or <span class="key-badge">ARROWS</span> / <span class="key-badge">MOUSE</span> Move</span>
+          <span><span class="key-badge">SPACE</span> Dash Pulse</span>
+          <span><span class="key-badge">P</span> Pause</span>
+        </div>
+      </div>
+
+      <!-- Pause Modal Screen -->
+      <div id="pause-modal" class="modal-screen hidden">
+        <h2 class="modal-title">SYSTEM PAUSED</h2>
+        <p class="modal-subtitle">Consciousness simulation temporarily suspended.</p>
+        <button id="resume-btn" class="btn-primary">RESUME SIMULATION</button>
+      </div>
+
+      <!-- Game Over Modal Screen -->
+      <div id="gameover-modal" class="modal-screen hidden">
+        <h2 class="modal-title" style="color: #ff3b5c; text-shadow: 0 0 15px rgba(255, 59, 92, 0.7);">ENERGY DEPLETED</h2>
+        <p class="modal-subtitle">Noe's consciousness level reached zero.</p>
+        
+        <div class="stats-summary">
+          <div class="stat-row">
+            <span class="stat-label">Final Score:</span>
+            <span id="final-score" class="stat-val">0</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Best Score:</span>
+            <span id="best-score" class="stat-val">0</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Energy Collected:</span>
+            <span id="final-cubes" class="stat-val">0</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Survived Wave:</span>
+            <span id="final-wave" class="stat-val">1</span>
+          </div>
+        </div>
+
+        <button id="restart-btn" class="btn-primary">RESTART NOE</button>
+      </div>
+    </div>
+  </main>
+
+  <script src="game.js"></script>
+</body>
+</html>
