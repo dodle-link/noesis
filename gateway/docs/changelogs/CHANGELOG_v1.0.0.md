@@ -9,7 +9,7 @@ This is the first release of Noesis Hub as a separate and independent connector 
 - Created clean API boundary (noesis_api.h) for communication with Noesis Core
 - Updated build system to work with separate repositories
 - Updated scripts to find the Noesis Core through environment variables
-- Changed license to MIT License (from the original Noesis License)
+- Changed license to the MIT License
 - Added improved cross-repository dependency management
 - Implemented dynamic loading of Noesis Core library
 - Moved all quantum-related functionality back to Noesis Core repository

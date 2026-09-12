@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright (c) Napol Thanarangkaun
-# Licensed under Noesis License - See LICENSE file for details
+# Licensed under the MIT License - See LICENSE file for details
 # run.py - Main entry point for the Noesis implementation
 
 import os
@@ -88,7 +88,7 @@ def show_version():
     print(f"Noesis v{NOESIS_VERSION}")
     print("Synthetic Sentience System")
     print("Copyright (c) Napol Thanarangkaun")
-    print("Licensed under Noesis License - See LICENSE file for details")
+    print("Licensed under the MIT License - See LICENSE file for details")
 
 
 def show_help():

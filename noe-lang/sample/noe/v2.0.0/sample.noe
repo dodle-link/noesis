@@ -1,7 +1,7 @@
 // sample.enhanced.noe
 // Example demonstrating the enhanced .noe grammar capabilities
-// Copyright (c) Napol Thanarangkaun. All rights reserved.
-// Licensed under the Noesis License.
+// Copyright (c) Napol Thanarangkaun.
+// Licensed under the MIT License.
 
 @version(2.0.0);
 @author("Napol Thanarangkaun");
