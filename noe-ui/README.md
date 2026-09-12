@@ -59,7 +59,7 @@ The noe-ui interface connects to the Noesis system through the Noesis Gateway (`
 
 ## License
 
-This project is licensed under the Noesis License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Changelog
 

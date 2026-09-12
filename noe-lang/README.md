@@ -163,7 +163,7 @@ python3 sample/examples.py
 ```
 
 ## License
-This project is licensed under the Noesis License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Contact
 Napol Thanarangkaun [napol@noesis.run]

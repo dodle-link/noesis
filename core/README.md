@@ -87,8 +87,7 @@ core/
 
 ## License Information
 
-This repository is licensed under the custom [Noesis License](LICENSE) which includes
-requirements for attribution and profit-sharing for commercial use.
+This repository is licensed under the [MIT License](LICENSE).
 
 ## AI and Consciousness Integration
 
