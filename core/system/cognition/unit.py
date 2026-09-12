@@ -308,7 +308,7 @@ try:
     compatible = any(p in lic.lower() for p in PERMISSIVE)
     print(f"Model: {repr(model_name)}")
     print(f"License: {{lic}}")
-    print(f"Compatible with Noesis License: {{'Yes' if compatible else 'Needs review'}}")
+    print(f"Compatible with MIT License: {{'Yes' if compatible else 'Needs review'}}")
     sys.exit(0 if compatible else 1)
 except Exception as e:
     print(f"Error: {{e}}")
