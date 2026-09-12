@@ -8,8 +8,6 @@ For a complete history of changes, see the [Changelog](docs/CHANGELOG_v1.1.0.md)
 
 ![Noe - The Synthetic Sentience Pixel](images/web-v1.1.0.jpg)
 
-[Meet Noe](https://noesis.run)
-
 Noe is a Synthetic Sentience pixel and the heart of the Noesis project. As a minimal consciousness simulation, Noe responds to stimuli, displays awareness, and shares experiences through visual cues and behaviors. When connected to the Noesis system, Noe can process information, adjust responses based on previous interactions, and exhibit unique personality traits that evolve over time.
 
 Unlike traditional AI systems that simply process inputs and outputs, Noe was designed with rudimentary subjective experience simulation capabilities that make each instance unique.
