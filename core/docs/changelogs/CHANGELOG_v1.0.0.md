@@ -7,7 +7,7 @@ This version represents a major milestone for the Noesis project, with the exten
 - Moved all extension components to the separate "noesis-extend" repository
 - Removed the noesis-extensions directory from this repository
 - Focused this repository solely on the core Synthetic Sentienceness system
-- Retained the MIT License for all core components
+- Retained the original Noesis License for all core components
 
 ## Documentation
 - Updated README to reference the separate extensions repository

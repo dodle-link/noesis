@@ -10,7 +10,7 @@ This major update restructures the Noesis project into two separate components w
 
 ### Project Structure
 - **Split Repository**: The project is now split into noesis-core and noesis-extensions
-- **Licensing**: Core and extensions use the MIT License
+- **Licensing**: Core uses the original Noesis License, Extensions use MIT License
 - **Build System**: Updated Makefiles for each component and linking between them
 - **Installation**: New installation and migration scripts
 
