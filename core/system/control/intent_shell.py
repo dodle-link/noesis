@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright (c) Napol Thanarangkaun
-# Licensed under Noesis License - See LICENSE file for details
+# Licensed under the MIT License - See LICENSE file for details
 
 import subprocess
 import sys

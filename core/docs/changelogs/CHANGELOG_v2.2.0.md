@@ -9,7 +9,7 @@ This major update to Noesis introduces comprehensive AI integration and advanced
 ## Major Features
 
 - **AI Integration System**: Complete integration with free and open-source Hugging Face models
-  - License compatibility verification to ensure compliance with Noesis License
+  - License compatibility verification for use with this MIT-licensed project
   - Support for multiple high-quality open-source AI models
   - Enhanced text generation and natural language understanding
   - Real-time AI-powered perception enhancement
@@ -38,7 +38,7 @@ This major update to Noesis introduces comprehensive AI integration and advanced
 
 - Requires Python 3.7+ for AI functionality
 - Optional dependencies: transformers, torch, and huggingface_hub Python packages
-- All AI models are compatible with the Noesis License
+- Supported AI models are checked for compatibility with this MIT-licensed project
 - Backward compatible with v2.1.x configuration files
 
 ## Coming in Future Releases

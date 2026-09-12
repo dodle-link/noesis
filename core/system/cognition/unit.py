@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright (c) Napol Thanarangkaun
-# Licensed under Noesis License - See LICENSE file for details
+# Licensed under the MIT License - See LICENSE file for details
 
 import os
 import sys
@@ -104,7 +104,7 @@ def ai_set_model(requested_model):
     license_info = AI_MODEL_LICENSES.get(requested_model)
     if license_info:
         print(f"Model: {requested_model}\nLicense: {license_info}")
-        print("This model's license is compatible with the Noesis License.")
+        print("This model's license is compatible with this MIT-licensed project.")
     else:
         print(f"Warning: Model '{requested_model}' is not in the predefined list")
         ans = input("Continue anyway? (y/N): ").strip().lower()
@@ -308,7 +308,7 @@ try:
     compatible = any(p in lic.lower() for p in PERMISSIVE)
     print(f"Model: {repr(model_name)}")
     print(f"License: {{lic}}")
-    print(f"Compatible with Noesis License: {{'Yes' if compatible else 'Needs review'}}")
+    print(f"Compatible with project license policy: {{'Yes' if compatible else 'Needs review'}}")
     sys.exit(0 if compatible else 1)
 except Exception as e:
     print(f"Error: {{e}}")

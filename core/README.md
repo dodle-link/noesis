@@ -103,7 +103,7 @@ Noesis v2.2.0 includes AI integration with free models from Hugging Face to enha
 ### AI Features
 
 - Integration with free Hugging Face models (MIT, Apache 2.0 licensed)
-- License compatibility checking with Noesis License
+- License compatibility checking for use with this MIT-licensed project
 - Enhanced perception and emotion processing
 - Introspection capabilities
 - Self-reflection based on consciousness theories
