@@ -143,7 +143,7 @@ def _add_to_history(history, command, limit=MAX_HISTORY):
 
 
 def _clear_screen():
-    os.system("clear")
+    os.system("cls" if os.name == "nt" else "clear")
 
 
 def _capture_output(func, *args, **kwargs):
