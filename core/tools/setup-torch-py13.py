@@ -9,6 +9,7 @@ import subprocess
 import platform
 import os
 
+
 def run_command(command):
     """Run a shell command and return the output."""
     print(f"Running: {command}")
@@ -22,18 +23,21 @@ def run_command(command):
             print(result.stdout)
     return result.returncode == 0
 
+
 def get_python_version():
     """Get the Python version as a tuple (major, minor)."""
     return (sys.version_info.major, sys.version_info.minor)
+
 
 def is_apple_silicon():
     """Check if the system is running on Apple Silicon."""
     return platform.machine() == 'arm64' and platform.system() == 'Darwin'
 
+
 def install_pytorch_py13():
     """Install PyTorch for Python 3.13."""
     print("Installing PyTorch for Python 3.13...")
-    
+
     # For Python 3.13, use the latest nightly builds which may support newer Python
     if is_apple_silicon():
         print("Detected Apple Silicon (M1/M2/M3)")
@@ -42,11 +46,12 @@ def install_pytorch_py13():
         print("Detected Intel Mac")
         return run_command("pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cpu")
 
+
 def install_pytorch_minimal():
     """Install a minimal version of PyTorch that enables API functionality."""
     print("Installing minimal PyTorch (API-only compatibility)...")
-    
-    # Use a solution like tinygrad as a fallback 
+
+    # Use a solution like tinygrad as a fallback
     success = run_command("pip install tinygrad")
     if success:
         # Create a compatibility layer for the Noesis system
@@ -62,11 +67,11 @@ class FakeTorch:
         self.__version__ = "0.1.0-compat"
         self.nn = FakeNN()
         self.cuda = FakeCuda()
-        
+
     def tensor(self, *args, **kwargs):
         import numpy as np
         return np.array(*args)
-    
+
     def load(self, *args, **kwargs):
         warnings.warn("PyTorch model loading not available in compatibility mode")
         return None
@@ -79,7 +84,7 @@ class FakeNN:
 class FakeCuda:
     def __init__(self):
         pass
-    
+
     def is_available(self):
         return False
 
@@ -93,35 +98,37 @@ print("PyTorch compatibility layer initialized.")
         return True
     return False
 
+
 def install_transformers():
     """Install Hugging Face Transformers and related packages."""
     print("Installing Hugging Face libraries...")
     return run_command("pip install transformers accelerate huggingface_hub")
 
+
 def main():
     """Main function."""
     print(f"Python version: {sys.version}")
     print(f"System: {platform.system()} {platform.machine()}")
-    
+
     # Create .noesis directory if it doesn't exist
     os.makedirs(os.path.expanduser("~/.noesis"), exist_ok=True)
-    
+
     # Try to install regular PyTorch first
     pytorch_success = install_pytorch_py13()
-    
+
     # If that fails, try the minimal compatibility layer
     if not pytorch_success:
         print("Standard PyTorch installation failed. Trying minimal compatibility layer...")
         pytorch_success = install_pytorch_minimal()
-        
+
     if not pytorch_success:
         print("Failed to install any PyTorch solution. Noesis AI features may be unavailable.")
-    
+
     # Install Transformers (even if PyTorch failed - some features might still work)
     transformers_success = install_transformers()
     if not transformers_success:
         print("Failed to install Transformers. Please try manually.")
-    
+
     # Attempt to verify installations
     try:
         import torch
@@ -131,7 +138,7 @@ def main():
     except ImportError:
         print("PyTorch import failed.")
         pytorch_success = False
-        
+
     try:
         import transformers
         print(f"Transformers available! Version: {transformers.__version__}")
@@ -139,7 +146,7 @@ def main():
     except ImportError:
         print("Transformers import failed.")
         transformers_success = False
-    
+
     if pytorch_success and transformers_success:
         print("\nAll dependencies installed successfully!")
         return True
@@ -149,6 +156,7 @@ def main():
     else:
         print("\nInstallation failed. AI features will be unavailable.")
         return False
+
 
 if __name__ == "__main__":
     success = main()

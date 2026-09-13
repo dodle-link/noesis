@@ -23,6 +23,7 @@ def _get_state_io():
     _state_io = mod
     return mod
 
+
 CONSCIOUSNESS_MODEL = "IIT"
 CONSCIOUSNESS_LEVEL = 3
 SELF_REFLECTION_INTERVAL = 300
