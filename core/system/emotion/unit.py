@@ -21,6 +21,7 @@ def _get_state_io():
     _state_io = mod
     return mod
 
+
 EMOTION_NEUTRAL = 0
 EMOTION_HAPPY = 1
 EMOTION_SAD = 2
