@@ -27,6 +27,10 @@ class IntentApiTests(unittest.TestCase):
         response = self.intent.process_intent_api("logic a && b")
         self.assertEqual(response, "Logic result: FALSE")
 
+    def test_implication_operator_is_detected_before_not(self):
+        response = self.intent.process_intent_api("logic A=>B")
+        self.assertEqual(response, "Logic result: FALSE")
+
     def test_logic_command_ignores_partial_word_matches(self):
         response = self.intent.process_intent_api("logic ORDINARY")
         self.assertEqual(response, "Unknown logical expression: ORDINARY")

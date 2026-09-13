@@ -99,11 +99,11 @@ def evaluate_boolean(a, operator, b):
 
 def parse_logical_expression(expression, announce=True):
     symbol_operators = (
+        ("=>", "IMPLIES", LOGIC_IMPLIES),
         ("&&", "AND", LOGIC_AND),
         ("||", "OR", LOGIC_OR),
-        ("!", "NOT", LOGIC_NOT),
         ("^", "XOR", LOGIC_XOR),
-        ("=>", "IMPLIES", LOGIC_IMPLIES),
+        ("!", "NOT", LOGIC_NOT),
     )
 
     for symbol, label, operator in symbol_operators:
@@ -150,12 +150,13 @@ def _evaluate_logical_expression(expression, announce=True):
 def _add_to_history(history, command, limit=MAX_HISTORY):
     if command and (not history or command != history[0]):
         history.insert(0, command)
-        if len(history) > limit:
+        if limit is not None and len(history) > limit:
             history.pop()
 
 
 def _clear_screen():
-    os.system("cls" if os.name == "nt" else "clear")
+    print("\033[2J\033[H", end="")
+    sys.stdout.flush()
 
 
 def reason_about(problem):
@@ -418,7 +419,7 @@ def main(args=None):
         history = []
 
         def add_to_history(cmd):
-            _add_to_history(history, cmd)
+            _add_to_history(history, cmd, limit=None)
         handle_quantum_io(history, add_to_history)
         return
 
