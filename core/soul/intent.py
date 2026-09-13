@@ -98,6 +98,20 @@ def evaluate_boolean(a, operator, b):
 
 
 def parse_logical_expression(expression, announce=True):
+    symbol_operators = (
+        ("&&", "AND", LOGIC_AND),
+        ("||", "OR", LOGIC_OR),
+        ("!", "NOT", LOGIC_NOT),
+        ("^", "XOR", LOGIC_XOR),
+        ("=>", "IMPLIES", LOGIC_IMPLIES),
+    )
+
+    for symbol, label, operator in symbol_operators:
+        if symbol in expression:
+            if announce:
+                print(f"{label} operation detected")
+            return operator
+
     tokens = set(re.findall(r"[A-Z]+", expression.upper()))
 
     if "AND" in tokens:
