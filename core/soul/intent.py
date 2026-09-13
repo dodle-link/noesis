@@ -4,9 +4,12 @@
 # intent.py - Central orchestrator for the Noesis system
 
 import os
+import re
 import sys
 import importlib.util
 import time
+from contextlib import redirect_stdout
+from io import StringIO
 
 NOESIS_VERSION = "2.2.0"
 
@@ -39,6 +42,7 @@ VERBOSE_MODE = False
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _loaded_modules = {}
+MAX_HISTORY = 50
 
 
 def _load_module(rel_path):
@@ -49,6 +53,8 @@ def _load_module(rel_path):
     if not os.path.isfile(path):
         return None
     spec = importlib.util.spec_from_file_location(key.replace('/', '_'), path)
+    if spec is None or spec.loader is None:
+        return None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     _loaded_modules[key] = mod
@@ -93,24 +99,58 @@ def evaluate_boolean(a, operator, b):
     return UNKNOWN
 
 
-def parse_logical_expression(expression):
-    if "AND" in expression:
-        print("AND operation detected")
+def parse_logical_expression(expression, announce=True):
+    tokens = set(re.findall(r"[A-Z]+", expression.upper()))
+
+    if "AND" in tokens:
+        if announce:
+            print("AND operation detected")
         return LOGIC_AND
-    elif "OR" in expression:
-        print("OR operation detected")
+    elif "OR" in tokens:
+        if announce:
+            print("OR operation detected")
         return LOGIC_OR
-    elif "NOT" in expression:
-        print("NOT operation detected")
+    elif "NOT" in tokens:
+        if announce:
+            print("NOT operation detected")
         return LOGIC_NOT
-    elif "XOR" in expression:
-        print("XOR operation detected")
+    elif "XOR" in tokens:
+        if announce:
+            print("XOR operation detected")
         return LOGIC_XOR
-    elif "IMPLIES" in expression:
-        print("IMPLIES operation detected")
+    elif "IMPLIES" in tokens:
+        if announce:
+            print("IMPLIES operation detected")
         return LOGIC_IMPLIES
-    print("Unknown logical expression")
-    return -1
+    if announce:
+        print("Unknown logical expression")
+    return UNKNOWN
+
+
+def _evaluate_logical_expression(expression, announce=True):
+    operator = parse_logical_expression(expression, announce=announce)
+    if operator == UNKNOWN:
+        return UNKNOWN
+    right_operand = None if operator == LOGIC_NOT else FALSE
+    return evaluate_boolean(TRUE, operator, right_operand)
+
+
+def _add_to_history(history, command, limit=MAX_HISTORY):
+    if command and (not history or command != history[0]):
+        history.insert(0, command)
+        if len(history) > limit:
+            history.pop()
+
+
+def _clear_screen():
+    os.system("clear")
+
+
+def _capture_output(func, *args, **kwargs):
+    buf = StringIO()
+    with redirect_stdout(buf):
+        func(*args, **kwargs)
+    return buf.getvalue().strip()
 
 
 def reason_about(problem):
@@ -207,7 +247,7 @@ def process_intention(intention, history, add_to_history_fn):
         state = "enabled" if VERBOSE_MODE else "disabled"
         log_with_timestamp(f"Verbose mode {state}", "INFO")
     elif intention_lower in ("clear",):
-        os.system('clear')
+        _clear_screen()
         print(f"{CYAN}NOESIS Cognitive Interface{NC}")
     elif intention_lower in ("quantum",):
         log_with_timestamp("Switching to quantum mode", "INFO")
@@ -239,9 +279,8 @@ def process_intention(intention, history, add_to_history_fn):
     elif intention_lower.startswith("logic "):
         expression = intention[len("logic "):].strip()
         log_with_timestamp(f"Evaluating logical expression: {expression}", "DEBUG")
-        operator = parse_logical_expression(expression)
-        if operator >= 0:
-            result = evaluate_boolean(TRUE, operator, FALSE) if operator != LOGIC_NOT else evaluate_boolean(TRUE, operator, None)
+        result = _evaluate_logical_expression(expression)
+        if result != UNKNOWN:
             if result == TRUE:
                 log_with_timestamp("Expression evaluates to TRUE", "SUCCESS")
             else:
@@ -330,10 +369,7 @@ def handle_io():
     history = []
 
     def add_to_history(cmd):
-        if cmd and (not history or cmd != history[0]):
-            history.insert(0, cmd)
-            if len(history) > 50:
-                history.pop()
+        _add_to_history(history, cmd)
 
     print(f"{CYAN}Welcome to NOESIS intent system{NC}")
     print()
@@ -370,8 +406,7 @@ def main(args=None):
         history = []
 
         def add_to_history(cmd):
-            if cmd and (not history or cmd != history[0]):
-                history.insert(0, cmd)
+            _add_to_history(history, cmd)
         handle_quantum_io(history, add_to_history)
         return
 
@@ -412,36 +447,28 @@ def _process_pixel_context(context: str) -> None:
 
 def process_intent_api(text: str) -> str:
     """Programmatic entry point — no stdin interaction. Returns response as string."""
-    import io
     text = text.strip()
     text_lower = text.lower()
 
-    old_stdout = sys.stdout
-    sys.stdout = buf = io.StringIO()
     try:
-        if text_lower.startswith("pixel:"):
-            _process_pixel_context(text[len("pixel:"):])
-        elif text_lower.startswith("reason about "):
-            reason_about(text[len("reason about "):].strip())
-        elif text_lower.startswith("logic "):
-            expression = text[len("logic "):].strip()
-            operator = parse_logical_expression(expression)
-            if operator >= 0:
-                result = (evaluate_boolean(TRUE, operator, None)
-                          if operator == LOGIC_NOT
-                          else evaluate_boolean(TRUE, operator, FALSE))
-                print(f"Logic result: {'TRUE' if result == TRUE else 'FALSE'}")
+        def _process():
+            if text_lower.startswith("pixel:"):
+                _process_pixel_context(text[len("pixel:"):])
+            elif text_lower.startswith("reason about "):
+                reason_about(text[len("reason about "):].strip())
+            elif text_lower.startswith("logic "):
+                expression = text[len("logic "):].strip()
+                result = _evaluate_logical_expression(expression, announce=False)
+                if result != UNKNOWN:
+                    print(f"Logic result: {'TRUE' if result == TRUE else 'FALSE'}")
+                else:
+                    print(f"Unknown logical expression: {expression}")
             else:
-                print(f"Unknown logical expression: {expression}")
-        else:
-            reason_about(text)
-    except Exception as e:
-        sys.stdout = old_stdout
-        return f"System error: {e}"
-    finally:
-        sys.stdout = old_stdout
+                reason_about(text)
 
-    response = buf.getvalue().strip()
+        response = _capture_output(_process)
+    except Exception as e:
+        return f"System error: {e}"
     return response if response else f"Intent processed: {text}"
 
 
