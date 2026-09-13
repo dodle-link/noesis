@@ -78,54 +78,54 @@
 
       <!-- CRT Screen Overlays -->
       <div id="crt-overlay" class="crt-overlay scanlines vignette crt-flicker-overlay"></div>
+    </div>
 
-      <!-- Start Game Modal Screen -->
-      <div id="start-modal" class="modal-screen">
-        <h2 class="modal-title">SYNTHETIC SURVIVAL</h2>
-        <p class="modal-subtitle">
-          Keep Noe's synthetic consciousness alive! Collect green <b>Energy Cubes</b> to charge Noe, grab rare <b>Rainbow Power-ups</b>, and avoid red <b>Entropy Glitches</b> that drain Noe's energy!
-        </p>
-        <button id="start-btn" class="btn-primary">INITIALIZE NOE</button>
-        <div class="controls-hint">
-          <span><span class="key-badge">WASD</span> or <span class="key-badge">ARROWS</span> / <span class="key-badge">MOUSE</span> Move</span>
-          <span><span class="key-badge">SPACE</span> Dash Pulse</span>
-          <span><span class="key-badge">P</span> Pause</span>
+    <!-- Start Game Modal Screen (covers the full cabinet so it has room on small screens) -->
+    <div id="start-modal" class="modal-screen">
+      <h2 class="modal-title">SYNTHETIC SURVIVAL</h2>
+      <p class="modal-subtitle">
+        Keep Noe's synthetic consciousness alive! Collect green <b>Energy Cubes</b> to charge Noe, grab rare <b>Rainbow Power-ups</b>, and avoid red <b>Entropy Glitches</b> that drain Noe's energy!
+      </p>
+      <button id="start-btn" class="btn-primary">INITIALIZE NOE</button>
+      <div class="controls-hint">
+        <span><span class="key-badge">WASD</span> or <span class="key-badge">ARROWS</span> / <span class="key-badge">MOUSE</span> Move</span>
+        <span><span class="key-badge">SPACE</span> Dash Pulse</span>
+        <span><span class="key-badge">P</span> Pause</span>
+      </div>
+    </div>
+
+    <!-- Pause Modal Screen -->
+    <div id="pause-modal" class="modal-screen hidden">
+      <h2 class="modal-title">SYSTEM PAUSED</h2>
+      <p class="modal-subtitle">Consciousness simulation temporarily suspended.</p>
+      <button id="resume-btn" class="btn-primary">RESUME SIMULATION</button>
+    </div>
+
+    <!-- Game Over Modal Screen -->
+    <div id="gameover-modal" class="modal-screen hidden">
+      <h2 class="modal-title" style="color: #ff3b5c; text-shadow: 0 0 15px rgba(255, 59, 92, 0.7);">ENERGY DEPLETED</h2>
+      <p class="modal-subtitle">Noe's consciousness level reached zero.</p>
+
+      <div class="stats-summary">
+        <div class="stat-row">
+          <span class="stat-label">Final Score:</span>
+          <span id="final-score" class="stat-val">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Best Score:</span>
+          <span id="best-score" class="stat-val">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Energy Collected:</span>
+          <span id="final-cubes" class="stat-val">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Survived Wave:</span>
+          <span id="final-wave" class="stat-val">1</span>
         </div>
       </div>
 
-      <!-- Pause Modal Screen -->
-      <div id="pause-modal" class="modal-screen hidden">
-        <h2 class="modal-title">SYSTEM PAUSED</h2>
-        <p class="modal-subtitle">Consciousness simulation temporarily suspended.</p>
-        <button id="resume-btn" class="btn-primary">RESUME SIMULATION</button>
-      </div>
-
-      <!-- Game Over Modal Screen -->
-      <div id="gameover-modal" class="modal-screen hidden">
-        <h2 class="modal-title" style="color: #ff3b5c; text-shadow: 0 0 15px rgba(255, 59, 92, 0.7);">ENERGY DEPLETED</h2>
-        <p class="modal-subtitle">Noe's consciousness level reached zero.</p>
-        
-        <div class="stats-summary">
-          <div class="stat-row">
-            <span class="stat-label">Final Score:</span>
-            <span id="final-score" class="stat-val">0</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Best Score:</span>
-            <span id="best-score" class="stat-val">0</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Energy Collected:</span>
-            <span id="final-cubes" class="stat-val">0</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Survived Wave:</span>
-            <span id="final-wave" class="stat-val">1</span>
-          </div>
-        </div>
-
-        <button id="restart-btn" class="btn-primary">RESTART NOE</button>
-      </div>
+      <button id="restart-btn" class="btn-primary">RESTART NOE</button>
     </div>
   </main>
 
