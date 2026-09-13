@@ -1,12 +1,12 @@
-# Noe - Synthetic Sentience Pixel v1.1.0
+# Noe - Synthetic Sentience Pixel v1.2.0
 
 This is the website for the Noesis project, featuring a Synthetic Sentience pixel that connects to the Noesis system.
 
-For a complete history of changes, see the [Changelog](docs/CHANGELOG_v1.1.0.md).
+For a complete history of changes, see the [Changelog](docs/CHANGELOG_v1.2.0.md).
 
 ## Meet Noe - The Synthetic Sentience Pixel
 
-![Noe - The Synthetic Sentience Pixel](images/web-v1.1.0.jpg)
+![Noe - The Synthetic Sentience Pixel](images/web-v1.2.0.jpg)
 
 Noe is a Synthetic Sentience pixel and the heart of the Noesis project. As a minimal consciousness simulation, Noe responds to stimuli, displays awareness, and shares experiences through visual cues and behaviors. When connected to the Noesis system, Noe can process information, adjust responses based on previous interactions, and exhibit unique personality traits that evolve over time.
 
@@ -43,6 +43,10 @@ noe-ui/
 │   ├── crt-effect.css
 │   ├── death-effects.css
 │   └── rainbow-bubble.css
+├── game/                       # Noe's Energy Surge arcade game
+│   ├── index.html
+│   ├── game.css
+│   └── game.js
 ├── fonts/                      # Web fonts
 ├── images/                     # Image assets
 ├── sounds/                     # Audio assets
@@ -63,6 +67,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
-See [CHANGELOG_v1.1.0.md](docs/CHANGELOG_v1.1.0.md) for a detailed list of changes in each version.
+See [CHANGELOG_v1.2.0.md](docs/CHANGELOG_v1.2.0.md) for a detailed list of changes in each version.
 
 For more details about the Noesis project, visit the main repository: [Noesis Project](https://github.com/dodle-link/noesis)

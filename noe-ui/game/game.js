@@ -168,7 +168,18 @@ document.addEventListener('DOMContentLoaded', () => {
     Space: false
   };
 
+  // Keys that control gameplay and would otherwise trigger the browser's
+  // default scrolling behavior (arrows/space scroll the page vertically).
+  const scrollBlockedCodes = new Set([
+    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space',
+    'KeyW', 'KeyA', 'KeyS', 'KeyD'
+  ]);
+
   window.addEventListener('keydown', (e) => {
+    if (scrollBlockedCodes.has(e.code)) {
+      e.preventDefault();
+    }
+
     if (e.code === 'KeyP' || e.code === 'Escape') {
       if (gameState === 'PLAYING') pauseGame();
       else if (gameState === 'PAUSED') resumeGame();
@@ -181,7 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (e.key in keys) keys[e.key] = true;
     if (e.code in keys) keys[e.code] = true;
-  });
+  }, { passive: false });
 
   window.addEventListener('keyup', (e) => {
     if (e.key in keys) keys[e.key] = false;

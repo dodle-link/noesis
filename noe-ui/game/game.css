@@ -27,16 +27,20 @@
   -webkit-user-select: none;
 }
 
+html {
+  overflow: hidden;
+}
+
 body {
   background-color: #0b0c10;
   color: #e0e6ed;
   font-family: 'HKGrotesk', -apple-system, BlinkMacSystemFont, sans-serif;
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  overflow-x: hidden;
+  overflow: hidden;
   padding: 15px;
 }
 
@@ -45,8 +49,10 @@ body {
   width: 100%;
   max-width: 900px;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 8px 15px;
   margin-bottom: 12px;
   padding: 0 5px;
 }
@@ -89,8 +95,10 @@ body {
 
 .toggles-group {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 15px;
+  justify-content: center;
+  gap: 10px 15px;
 }
 
 .toggle-item {
@@ -300,6 +308,7 @@ input:checked + .slider:before {
   text-align: center;
   padding: 20px;
   gap: 15px;
+  overflow-y: auto;
   animation: fadeIn 0.3s ease;
 }
 
@@ -391,6 +400,17 @@ input:checked + .slider:before {
 
 /* Responsive adjustments */
 @media (max-width: 650px) {
+  .game-header {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .brand-section {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
   .hud-bar {
     grid-template-columns: 1fr 1fr;
     gap: 10px;
@@ -405,8 +425,132 @@ input:checked + .slider:before {
     font-size: 1.6rem;
   }
 
+  .modal-subtitle {
+    font-size: 0.95rem;
+  }
+
   .controls-hint {
     flex-direction: column;
     gap: 8px;
   }
+
+  .stats-summary {
+    grid-template-columns: 1fr;
+    padding: 12px 18px;
+  }
 }
+
+/* Small phones */
+@media (max-width: 420px) {
+  body {
+    padding: 8px;
+  }
+
+  .game-header {
+    margin-bottom: 8px;
+  }
+
+  .back-link {
+    font-size: 0.8rem;
+    padding: 4px 10px;
+  }
+
+  .game-title {
+    font-size: 0.95rem;
+  }
+
+  .toggle-item {
+    font-size: 0.75rem;
+    gap: 6px;
+  }
+
+  .toggle-switch {
+    width: 36px;
+    height: 20px;
+  }
+
+  .slider:before {
+    height: 14px;
+    width: 14px;
+  }
+
+  input:checked + .slider:before {
+    transform: translateX(16px);
+  }
+
+  .hud-value {
+    font-size: 0.95rem;
+  }
+
+  .modal-screen {
+    padding: 14px;
+    gap: 10px;
+  }
+
+  .modal-title {
+    font-size: 1.3rem;
+  }
+
+  .modal-subtitle {
+    font-size: 0.85rem;
+    line-height: 1.4;
+  }
+
+  .btn-primary {
+    font-size: 0.95rem;
+    padding: 10px 26px;
+  }
+
+  .key-badge {
+    font-size: 0.8rem;
+  }
+}
+
+/* Short / landscape viewports (limited vertical space) */
+@media (max-height: 480px) {
+  body {
+    padding: 8px;
+  }
+
+  .game-header {
+    margin-bottom: 6px;
+  }
+
+  .viewport-wrapper {
+    aspect-ratio: 16 / 7;
+  }
+
+  .modal-title {
+    font-size: 1.3rem;
+  }
+
+  .modal-subtitle {
+    font-size: 0.85rem;
+  }
+
+  .modal-screen {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .controls-hint {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px 14px;
+    font-size: 0.75rem;
+  }
+
+  .stats-summary {
+    padding: 10px 16px;
+    gap: 6px 20px;
+  }
+}
+
+/* Taller portrait phones: give the play field more vertical room */
+@media (max-width: 650px) and (orientation: portrait) {
+  .viewport-wrapper {
+    aspect-ratio: 3 / 4;
+  }
+}
+
