@@ -9,6 +9,8 @@ def _load_intent_module():
     base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     path = os.path.join(base, "soul", "intent.py")
     spec = importlib.util.spec_from_file_location("intent", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load intent module from {path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
