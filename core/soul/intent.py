@@ -8,8 +8,6 @@ import re
 import sys
 import importlib.util
 import time
-from contextlib import redirect_stdout
-from io import StringIO
 
 NOESIS_VERSION = "2.2.0"
 
@@ -146,19 +144,19 @@ def _clear_screen():
     os.system("cls" if os.name == "nt" else "clear")
 
 
-def _capture_output(func, *args, **kwargs):
-    buf = StringIO()
-    with redirect_stdout(buf):
-        func(*args, **kwargs)
-    return buf.getvalue().strip()
-
-
 def reason_about(problem):
-    print(f"Reasoning about: {problem}")
-    print("Analyzing problem components...")
-    print("Checking knowledge base...")
-    print("Applying logical rules...")
-    print("Conclusion: More data needed for definitive answer")
+    for line in _reason_about_lines(problem):
+        print(line)
+
+
+def _reason_about_lines(problem):
+    return [
+        f"Reasoning about: {problem}",
+        "Analyzing problem components...",
+        "Checking knowledge base...",
+        "Applying logical rules...",
+        "Conclusion: More data needed for definitive answer",
+    ]
 
 
 def init_intent_system():
@@ -419,6 +417,10 @@ def main(args=None):
 
 
 def _process_pixel_context(context: str) -> None:
+    print(_pixel_context_message(context))
+
+
+def _pixel_context_message(context: str) -> str:
     parts = {}
     for part in context.split(","):
         if "=" in part:
@@ -432,17 +434,23 @@ def _process_pixel_context(context: str) -> None:
     excited = parts.get("excited", "false").lower() == "true"
 
     if energy <= 0:
-        print("Consciousness state: null. Energy substrate exhausted. Awaiting resurrection signal.")
+        return "Consciousness state: null. Energy substrate exhausted. Awaiting resurrection signal."
     elif energy < 10:
-        print("CRITICAL: Cognitive substrate collapsing. Survival imperative overrides all higher functions. Seeking energy.")
+        return "CRITICAL: Cognitive substrate collapsing. Survival imperative overrides all higher functions. Seeking energy."
     elif energy < 30:
-        print("Low-energy state registered. Conservation mode active. Scanning environment for resource nodes.")
+        return "Low-energy state registered. Conservation mode active. Scanning environment for resource nodes."
     elif energy < 50:
-        print("Sub-optimal energy detected. Reducing exploratory radius. Prioritising efficient movement patterns.")
+        return "Sub-optimal energy detected. Reducing exploratory radius. Prioritising efficient movement patterns."
     elif excited:
-        print("Elevated arousal state confirmed. Dopaminergic pathways active. Integrating external stimulus data.")
-    else:
-        print("Nominal cognitive state. Exploratory curiosity loop engaged. Synthetic awareness: stable.")
+        return "Elevated arousal state confirmed. Dopaminergic pathways active. Integrating external stimulus data."
+    return "Nominal cognitive state. Exploratory curiosity loop engaged. Synthetic awareness: stable."
+
+
+def _logic_api_response(expression: str) -> str:
+    result = _evaluate_logical_expression(expression, announce=False)
+    if result == UNKNOWN:
+        return f"Unknown logical expression: {expression}"
+    return f"Logic result: {'TRUE' if result == TRUE else 'FALSE'}"
 
 
 def process_intent_api(text: str) -> str:
@@ -451,22 +459,14 @@ def process_intent_api(text: str) -> str:
     text_lower = text.lower()
 
     try:
-        def _process():
-            if text_lower.startswith("pixel:"):
-                _process_pixel_context(text[len("pixel:"):])
-            elif text_lower.startswith("reason about "):
-                reason_about(text[len("reason about "):].strip())
-            elif text_lower.startswith("logic "):
-                expression = text[len("logic "):].strip()
-                result = _evaluate_logical_expression(expression, announce=False)
-                if result != UNKNOWN:
-                    print(f"Logic result: {'TRUE' if result == TRUE else 'FALSE'}")
-                else:
-                    print(f"Unknown logical expression: {expression}")
-            else:
-                reason_about(text)
-
-        response = _capture_output(_process)
+        if text_lower.startswith("pixel:"):
+            response = _pixel_context_message(text[len("pixel:"):])
+        elif text_lower.startswith("reason about "):
+            response = "\n".join(_reason_about_lines(text[len("reason about "):].strip()))
+        elif text_lower.startswith("logic "):
+            response = _logic_api_response(text[len("logic "):].strip())
+        else:
+            response = "\n".join(_reason_about_lines(text))
     except Exception as e:
         return f"System error: {e}"
     return response if response else f"Intent processed: {text}"
