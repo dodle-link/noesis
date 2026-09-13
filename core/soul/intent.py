@@ -41,6 +41,13 @@ _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _loaded_modules = {}
 MAX_HISTORY = 50
+_SYMBOL_OPERATORS = (
+    (re.compile(r"\S\s*=>\s*\S"), "IMPLIES", LOGIC_IMPLIES),
+    (re.compile(r"\S\s*&&\s*\S"), "AND", LOGIC_AND),
+    (re.compile(r"\S\s*\|\|\s*\S"), "OR", LOGIC_OR),
+    (re.compile(r"\S\s*\^\s*\S"), "XOR", LOGIC_XOR),
+    (re.compile(r"(^|[\s(])!\s*\S"), "NOT", LOGIC_NOT),
+)
 
 
 def _load_module(rel_path):
@@ -98,16 +105,8 @@ def evaluate_boolean(a, operator, b):
 
 
 def parse_logical_expression(expression, announce=True):
-    symbol_operators = (
-        ("=>", "IMPLIES", LOGIC_IMPLIES),
-        ("&&", "AND", LOGIC_AND),
-        ("||", "OR", LOGIC_OR),
-        ("^", "XOR", LOGIC_XOR),
-        ("!", "NOT", LOGIC_NOT),
-    )
-
-    for symbol, label, operator in symbol_operators:
-        if symbol in expression:
+    for pattern, label, operator in _SYMBOL_OPERATORS:
+        if pattern.search(expression):
             if announce:
                 print(f"{label} operation detected")
             return operator
