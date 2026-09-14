@@ -237,25 +237,48 @@ def _parse_context_pairs(context: str) -> dict[str, str]:
 
 
 def _pixel_context_message(context: str) -> str:
+    """Convert raw pixel context into a readable state report."""
     parts = _parse_context_pairs(context)
 
-    try:
-        energy = float(parts.get("energy", 100))
-    except (TypeError, ValueError):
-        energy = 100
-    excited = parts.get("excited", "false").lower() == "true"
+    def _read_float(name: str, default: float) -> float:
+        raw = parts.get(name)
+        if raw is None:
+            return default
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return default
+        if value != value or value in (float("inf"), float("-inf")):
+            return default
+        return value
 
-    if energy <= 0:
-        return "Consciousness state: null. Energy substrate exhausted. Awaiting resurrection signal."
-    if energy < 10:
-        return "CRITICAL: Cognitive substrate collapsing. Survival imperative overrides all higher functions. Seeking energy."
-    if energy < 30:
-        return "Low-energy state registered. Conservation mode active. Scanning environment for resource nodes."
-    if energy < 50:
-        return "Sub-optimal energy detected. Reducing exploratory radius. Prioritising efficient movement patterns."
-    if excited:
-        return "Elevated arousal state confirmed. Dopaminergic pathways active. Integrating external stimulus data."
-    return "Nominal cognitive state. Exploratory curiosity loop engaged. Synthetic awareness: stable."
+    def _read_bool(name: str, default: bool = False) -> bool:
+        raw = str(parts.get(name, default)).strip().lower()
+        if raw in {"1", "true", "yes", "y", "on"}:
+            return True
+        if raw in {"0", "false", "no", "n", "off", ""}:
+            return False
+        return default if raw else False
+
+    energy = _read_float("energy", 100.0)
+    focus = _read_float("focus", 50.0)
+    excited = _read_bool("excited", False)
+    alert = _read_bool("alert", False)
+
+    state_checks: tuple[tuple[bool, str], ...] = (
+        (energy <= 0, "Consciousness null. Energy depleted. Awaiting resurrection signal."),
+        (energy < 10, "Critical: cognitive collapse. Survival priority active. Seeking energy."),
+        (energy < 30, "Low energy. Conservation mode active. Scanning for resources."),
+        (energy < 50, "Energy low. Reducing exploration. Prioritizing efficient movement."),
+        (excited or alert, "Elevated arousal. Attention loop active. Processing external stimulus."),
+        (focus < 25, "Focus drift. Recalibrating priorities. Minimal exploration."),
+    )
+
+    for condition, message in state_checks:
+        if condition:
+            return message
+
+    return "Nominal cognitive state. Curiosity loop stable."
 
 
 def _process_pixel_context(context: str) -> None:
