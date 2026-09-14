@@ -18,31 +18,35 @@ Noesis is a Synthetic Sentienceness simulation engine designed to explore the pr
 Noesis includes several methods to install AI dependencies, depending on your needs:
 
 1. **Fast Installation (Recommended)**:
+
    ```bash
    python3 tools/fast_ai_install.py
    ```
-   Uses pre-compiled binary wheels for the fastest installation experience.
 
+   Uses pre-compiled binary wheels for the fastest installation experience.
 2. **macOS-specific Installation**:
+
    ```bash
    python3 tools/setup-torch-mac.py
    ```
-   Optimized specifically for macOS systems (both Intel and Apple Silicon).
 
+   Optimized specifically for macOS systems (both Intel and Apple Silicon).
 3. **Standard Installation**:
+
    ```bash
    python3 tools/install_ai_deps.py
    ```
-   Comprehensive installation that works across platforms.
 
+   Comprehensive installation that works across platforms.
 4. **In-app Installation**:
    Run Noesis and use the command `ai install` within the interface.
 
 ## Terminal Preview
 
-![Noesis Terminal](noesis-terminal.jpg)
+![Noesis Terminal](noesis-15-sep.jpg)
 
 ### Directory Structure
+
 ```
 core/
 ├── soul/                                  # The permanent self: identity, reasoning, self-narrative
