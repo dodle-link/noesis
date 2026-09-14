@@ -36,7 +36,7 @@ def _load_module(rel_path):
 
 
 console = _load_module("system/control/console.py")
-GREEN, YELLOW, CYAN, PURPLE, NC = console.GREEN, console.YELLOW, console.CYAN, console.PURPLE, console.NC
+GREEN, YELLOW, CYAN, GREEN, NC = console.GREEN, console.YELLOW, console.CYAN, console.GREEN, console.NC
 log_with_timestamp = console.log_with_timestamp
 handle_error = console.handle_error
 add_to_history = console.add_to_history
@@ -86,7 +86,7 @@ def initialize_systems():
 
 
 def _show_help():
-    print(f"{PURPLE}== Cognitive Commands =={NC}")
+    print(f"{GREEN}== Cognitive Commands =={NC}")
     print(f"  {GREEN}- help:{NC}                View this help message")
     print(f"  {GREEN}- status:{NC}              Show system status")
     print(f"  {GREEN}- history:{NC}             View command history")
@@ -94,11 +94,11 @@ def _show_help():
     print(f"  {GREEN}- verbose:{NC}             Toggle verbose debug mode")
     print(f"  {GREEN}- exit:{NC}                Exit the system")
     print()
-    print(f"{PURPLE}== Reasoning & Logic =={NC}")
+    print(f"{GREEN}== Reasoning & Logic =={NC}")
     print(f"  {GREEN}- reason about <topic>:{NC} Reason about a given topic")
     print(f"  {GREEN}- logic <expression>:{NC   } Process a logical expression (AND, OR, NOT, XOR, IMPLIES)")
     print()
-    print(f"{PURPLE}== System Commands =={NC}")
+    print(f"{GREEN}== System Commands =={NC}")
     print(f"  {GREEN}- quantum:{NC}             Enter quantum processing mode")
     print(f"  {GREEN}- ai:{NC}                  Access AI and consciousness features")
     print(f"  {GREEN}- noe:{NC}                 Load, lint, save and restore .noe state files")
