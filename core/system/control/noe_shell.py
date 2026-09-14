@@ -8,7 +8,7 @@ import importlib.util
 
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 _CORE_DIR = os.path.dirname(os.path.dirname(_MODULE_DIR))
-_STATE_IO_PATH = os.path.join(os.path.dirname(_MODULE_DIR), "noe", "state_io.py")
+_STATE_IO_PATH = os.path.abspath(os.path.join(_MODULE_DIR, "..", "..", "..", "core", "soul", "intent.py"))
 
 _state_io = None
 
@@ -19,7 +19,9 @@ def _get_state_io():
         return _state_io
     if not os.path.isfile(_STATE_IO_PATH):
         return None
-    spec = importlib.util.spec_from_file_location("state_io", _STATE_IO_PATH)
+    spec = importlib.util.spec_from_file_location("intent_state_io", _STATE_IO_PATH)
+    if spec is None or spec.loader is None:
+        return None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     _state_io = mod
