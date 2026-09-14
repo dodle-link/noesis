@@ -449,6 +449,7 @@ document.addEventListener('DOMContentLoaded', () => {
       this.intent = 'WANDER';
       this.intentTimer = 0;
       this.focus = { x: this.x, y: this.y };
+      this.focusCube = null;
       this.orbitAngle = Math.random() * Math.PI * 2;
       this.pulseTime = Math.random() * Math.PI * 2;
       this.pulse = 0;
@@ -459,7 +460,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     chooseIntent() {
-      if (!player) return;
+      this.focusCube = null;
+
+      if (!player) {
+        if (cubes.length > 0 && Math.random() < 0.6) {
+          this.intent = 'CURIOUS';
+          this.focusCube = cubes[Math.floor(Math.random() * cubes.length)];
+          this.focus.x = this.focusCube.x;
+          this.focus.y = this.focusCube.y;
+        } else {
+          this.intent = 'WANDER';
+          this.focus.x = this.radius + Math.random() * (canvas.width - this.radius * 2);
+          this.focus.y = this.radius + Math.random() * (canvas.height - this.radius * 2);
+        }
+        return;
+      }
 
       const roll = Math.random();
       if (energy < 30 || roll < 0.45) {
@@ -470,10 +485,10 @@ document.addEventListener('DOMContentLoaded', () => {
         this.intent = 'OBSERVE';
         this.orbitAngle = Math.random() * Math.PI * 2;
       } else if (cubes.length > 0) {
-        const focusCube = cubes[Math.floor(Math.random() * cubes.length)];
         this.intent = 'CURIOUS';
-        this.focus.x = focusCube.x;
-        this.focus.y = focusCube.y;
+        this.focusCube = cubes[Math.floor(Math.random() * cubes.length)];
+        this.focus.x = this.focusCube.x;
+        this.focus.y = this.focusCube.y;
       } else {
         this.intent = 'WANDER';
         this.focus.x = this.radius + Math.random() * (canvas.width - this.radius * 2);
@@ -496,18 +511,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const orbitRadius = 70 + this.radius * 3;
         this.focus.x = player.x + Math.cos(this.orbitAngle) * orbitRadius;
         this.focus.y = player.y + Math.sin(this.orbitAngle) * orbitRadius;
-      } else if (this.intent === 'CURIOUS' && cubes.length > 0) {
-        let nearest = cubes[0];
-        let nearestDist = Infinity;
-        for (const cube of cubes) {
-          const cd = Math.hypot(cube.x - this.x, cube.y - this.y);
-          if (cd < nearestDist) {
-            nearest = cube;
-            nearestDist = cd;
+      } else if (this.intent === 'CURIOUS') {
+        if (!this.focusCube || !cubes.includes(this.focusCube)) {
+          if (cubes.length > 0) {
+            this.focusCube = cubes[Math.floor(Math.random() * cubes.length)];
+          } else {
+            this.intent = 'WANDER';
+            this.focus.x = this.radius + Math.random() * (canvas.width - this.radius * 2);
+            this.focus.y = this.radius + Math.random() * (canvas.height - this.radius * 2);
           }
         }
-        this.focus.x = nearest.x;
-        this.focus.y = nearest.y;
+        if (this.focusCube) {
+          this.focus.x = this.focusCube.x;
+          this.focus.y = this.focusCube.y;
+        }
       } else if (this.intent === 'WANDER') {
         const focusDist = Math.hypot(this.focus.x - this.x, this.focus.y - this.y);
         if (focusDist < 20) {
