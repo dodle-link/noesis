@@ -12,12 +12,13 @@ _perception = None
 _emotion = None
 _intent = None
 _data_storage = None
+_consciousness = None
 
 
 def _load_modules():
-    global _memory, _perception, _emotion, _intent, _data_storage
+    global _memory, _perception, _emotion, _intent, _data_storage, _consciousness
     import importlib.util, os
-    base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
     def load(rel):
         path = os.path.join(base, rel)
@@ -33,6 +34,13 @@ def _load_modules():
     _emotion = load("system/emotion/unit.py")
     _intent = load("soul/intent.py")
     _data_storage = load("system/memory/short.py")
+    _consciousness = load("system/cognition/consciousness.py")
+
+
+def _consciousness_processor():
+    if _consciousness and hasattr(_consciousness, "consciousness_process_perception"):
+        return _consciousness.consciousness_process_perception
+    return None
 
 
 def api_init():
@@ -42,6 +50,8 @@ def api_init():
     if _perception: _perception.init_perception()
     if _emotion: _emotion.init_emotion_system()
     if _data_storage: _data_storage.init_data_storage()
+    if _consciousness and hasattr(_consciousness, "init_consciousness"):
+        _consciousness.init_consciousness()
     print("API initialized successfully")
 
 
@@ -88,7 +98,7 @@ def api_process(request):
             print("Error: PROCESS requires input")
             return False
         if _perception:
-            _perception.process_text_input(parts[1])
+            _perception.process_text_input(parts[1], consciousness_processor=_consciousness_processor())
         print("OK:PROCESSED")
 
     elif action == "EMOTION":
@@ -99,6 +109,8 @@ def api_process(request):
         intensity = int(parts[2]) if len(parts) >= 3 else 5
         if _emotion:
             _emotion.set_emotion(emotion, intensity)
+        if _consciousness and hasattr(_consciousness, "consciousness_emotion_integration"):
+            _consciousness.consciousness_emotion_integration(emotion, intensity)
         print(f"OK:EMOTION:{emotion}:{intensity}")
 
     else:
@@ -130,7 +142,7 @@ def api_handle_json(json_str):
             print('{"status":"error","message":"Missing input parameter"}')
             return False
         if _perception:
-            _perception.process_text_input(inp)
+            _perception.process_text_input(inp, consciousness_processor=_consciousness_processor())
         print(f'{{"status":"ok","result":"processed"}}')
 
     else:

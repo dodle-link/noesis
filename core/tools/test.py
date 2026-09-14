@@ -6,7 +6,7 @@ import sys
 import os
 import importlib.util
 
-NOESIS_VERSION = "2.1.2"
+NOESIS_VERSION = "2.3.0"
 PINK = "\033[38;2;255;95;215m"
 GREEN = "\033[32m"
 BLUE = "\033[34m"
