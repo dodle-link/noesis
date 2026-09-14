@@ -166,6 +166,16 @@ def _announce_operator(label: str, announce: bool) -> None:
         print(f"{label} operation detected")
 
 
+def _match_operator(
+    expression: str,
+    patterns: tuple[tuple[re.Pattern, str, int], ...],
+) -> tuple[Optional[str], Optional[int]]:
+    for pattern, label, operator in patterns:
+        if pattern.search(expression):
+            return label, operator
+    return None, None
+
+
 def parse_logical_expression(expression: object, announce: bool = True) -> int:
     expression = _normalize_expression(expression)
     if not expression:
@@ -173,15 +183,12 @@ def parse_logical_expression(expression: object, announce: bool = True) -> int:
             print("Unknown logical expression")
         return UNKNOWN
 
-    for pattern, label, operator in _SYMBOL_OPERATORS:
-        if pattern.search(expression):
+    for patterns in (_SYMBOL_OPERATORS, _WORD_OPERATORS):
+        label, operator = _match_operator(expression, patterns)
+        if operator is not None:
             _announce_operator(label, announce)
             return operator
 
-    for pattern, label, operator in _WORD_OPERATORS:
-        if pattern.search(expression):
-            _announce_operator(label, announce)
-            return operator
     if announce:
         print("Unknown logical expression")
     return UNKNOWN
@@ -192,8 +199,10 @@ def evaluate_logical_expression(expression: object, announce: bool = True) -> in
     operator = parse_logical_expression(expression, announce=announce)
     if operator == UNKNOWN:
         return UNKNOWN
+
+    left_operand = TRUE
     right_operand = None if operator == LOGIC_NOT else FALSE
-    return evaluate_boolean(TRUE, operator, right_operand)
+    return evaluate_boolean(left_operand, operator, right_operand)
 
 
 def _evaluate_logical_expression(expression: object, announce: bool = True) -> int:
@@ -216,12 +225,20 @@ def _reason_about_lines(problem: object) -> list[str]:
     ]
 
 
+def _parse_context_pairs(context: str) -> dict[str, str]:
+    parts: dict[str, str] = {}
+    for part in (segment.strip() for segment in context.split(",")):
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        key = key.strip()
+        if key:
+            parts[key] = value.strip()
+    return parts
+
+
 def _pixel_context_message(context: str) -> str:
-    parts = {}
-    for part in context.split(","):
-        if "=" in part:
-            k, v = part.split("=", 1)
-            parts[k.strip()] = v.strip()
+    parts = _parse_context_pairs(context)
 
     try:
         energy = float(parts.get("energy", 100))
@@ -231,13 +248,13 @@ def _pixel_context_message(context: str) -> str:
 
     if energy <= 0:
         return "Consciousness state: null. Energy substrate exhausted. Awaiting resurrection signal."
-    elif energy < 10:
+    if energy < 10:
         return "CRITICAL: Cognitive substrate collapsing. Survival imperative overrides all higher functions. Seeking energy."
-    elif energy < 30:
+    if energy < 30:
         return "Low-energy state registered. Conservation mode active. Scanning environment for resource nodes."
-    elif energy < 50:
+    if energy < 50:
         return "Sub-optimal energy detected. Reducing exploratory radius. Prioritising efficient movement patterns."
-    elif excited:
+    if excited:
         return "Elevated arousal state confirmed. Dopaminergic pathways active. Integrating external stimulus data."
     return "Nominal cognitive state. Exploratory curiosity loop engaged. Synthetic awareness: stable."
 
@@ -263,21 +280,19 @@ def process_intent_api(text: object) -> str:
         return "Intent processed: "
 
     text_lower = text.lower()
-
     handlers: tuple[tuple[str, Callable[[str], str]], ...] = (
         ("pixel:", _pixel_context_message),
         ("reason about ", lambda value: "\n".join(_reason_about_lines(value.strip()))),
         ("logic ", lambda value: _logic_api_response(value.strip())),
     )
-    response = next(
-        (
-            handler(text[len(prefix):])
-            for prefix, handler in handlers
-            if text_lower.startswith(prefix)
-        ),
-        "\n".join(_reason_about_lines(text)),
-    )
-    return response if response else f"Intent processed: {text}"
+
+    for prefix, handler in handlers:
+        if text_lower.startswith(prefix):
+            payload = text[len(prefix):]
+            response = handler(payload)
+            return response if response else f"Intent processed: {text}"
+
+    return "\n".join(_reason_about_lines(text))
 
 
 if __name__ == "__main__":
