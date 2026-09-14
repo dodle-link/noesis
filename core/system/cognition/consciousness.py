@@ -259,6 +259,17 @@ def consciousness_process_perception(input_text):
     elif CONSCIOUSNESS_MODEL == "HOT":
         print(f"First-order perception: {input_text}")
         print("Second-order awareness: perceiving this input")
+    elif CONSCIOUSNESS_MODEL == "AST":
+        print(f"Updating attention schema for: {input_text}")
+        print("Attention schema indicates: input is being attended to")
+    elif CONSCIOUSNESS_MODEL == "GNW":
+        strength = CONSCIOUSNESS_LEVEL / 5 * 100
+        print(f"Igniting neuronal workspace for: {input_text}")
+        print(f"Broadcast strength: {strength:.0f}%")
+    elif CONSCIOUSNESS_MODEL == "PPT":
+        print(f"Generating prediction for: {input_text}")
+        error = max(0, 5 - CONSCIOUSNESS_LEVEL) * 10 + random.randint(0, 5)
+        print(f"Prediction error: {error}% (updating internal model)")
     else:
         print(f"Processing perception: {input_text}")
     return True
@@ -278,6 +289,13 @@ def consciousness_emotion_integration(emotion, intensity):
         print(f"- Aware of feeling {emotion} with intensity {intensity}")
         if CONSCIOUSNESS_LEVEL > 3:
             print("- Aware of being aware of this feeling")
+    elif CONSCIOUSNESS_MODEL == "AST":
+        print(f"- Attention schema shifts toward: {emotion} ({intensity}/10)")
+    elif CONSCIOUSNESS_MODEL == "GNW":
+        activation = int(intensity) / 10 * 100
+        print(f"- Emotion ({emotion}/{intensity}) triggers workspace activation: {activation:.0f}%")
+    elif CONSCIOUSNESS_MODEL == "PPT":
+        print(f"- Emotion ({emotion}/{intensity}) treated as prediction error signal")
     else:
         print(f"- Experiencing {emotion} ({intensity}/10)")
     return True

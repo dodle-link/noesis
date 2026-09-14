@@ -5,7 +5,7 @@
 import re
 import time
 
-NOESIS_VERSION = "2.1.2"
+NOESIS_VERSION = "2.3.0"
 GREEN = "\033[32m"
 BLUE = "\033[34m"
 YELLOW = "\033[33m"

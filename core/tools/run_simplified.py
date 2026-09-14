@@ -47,7 +47,7 @@ def log_message(message, level="INFO"):
 def print_banner():
     print()
     print(f"{PINK}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{NC}")
-    print(f"{PINK}  NOESIS v2.1.2 - SIMPLIFIED         {NC}")
+    print(f"{PINK}  NOESIS v2.3.0 - SIMPLIFIED         {NC}")
     print(f"{PINK}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{NC}")
     print()
 
@@ -56,19 +56,19 @@ def main():
     print_banner()
     log_message("Loading modules...", "INFO")
 
-    soul_path = os.path.join(os.path.dirname(__file__), "..", "soul", "intent.py")
-    if not os.path.exists(soul_path):
-        log_message("Cannot find soul/intent.py", "ERROR")
+    orchestrator_path = os.path.join(os.path.dirname(__file__), "..", "system", "control", "orchestrator.py")
+    if not os.path.exists(orchestrator_path):
+        log_message("Cannot find system/control/orchestrator.py", "ERROR")
         sys.exit(1)
 
-    spec = importlib.util.spec_from_file_location("intent", soul_path)
-    intent = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(intent)
-    log_message("Found and loaded intent.py", "SUCCESS")
+    spec = importlib.util.spec_from_file_location("orchestrator", orchestrator_path)
+    orchestrator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(orchestrator)
+    log_message("Found and loaded orchestrator.py", "SUCCESS")
 
-    if hasattr(intent, "initialize_systems") and callable(intent.initialize_systems):
+    if hasattr(orchestrator, "initialize_systems") and callable(orchestrator.initialize_systems):
         log_message("Found initialize_systems function, running it", "INFO")
-        intent.initialize_systems()
+        orchestrator.initialize_systems()
     else:
         log_message("initialize_systems function not found", "ERROR")
         sys.exit(1)

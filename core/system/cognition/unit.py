@@ -52,6 +52,22 @@ def _load_emotion():
     return _emotion_module
 
 
+def _load_consciousness():
+    global _consciousness_module
+    if _consciousness_module:
+        return _consciousness_module
+    try:
+        import importlib.util, os
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "consciousness.py")
+        spec = importlib.util.spec_from_file_location("consciousness", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _consciousness_module = mod
+    except Exception:
+        pass
+    return _consciousness_module
+
+
 def _check_import(pkg):
     r = subprocess.run([sys.executable, "-c", f"import {pkg}"], capture_output=True)
     return r.returncode == 0
@@ -61,6 +77,7 @@ def init_ai_system():
     global AI_SYSTEM_ENABLED
     print("Initializing AI integration system...")
     os.makedirs(AI_MODELS_CACHE_DIR, exist_ok=True)
+    _load_consciousness()
 
     if not _check_import("transformers"):
         print("Warning: Transformers package not found")
@@ -221,6 +238,9 @@ def ai_process_perception(input_text):
     if not AI_SYSTEM_ENABLED:
         print("AI processing not available - using basic perception")
         return False
+    cons = _load_consciousness()
+    if cons and hasattr(cons, "consciousness_process_perception"):
+        cons.consciousness_process_perception(input_text)
     prompt = f"As the Noesis Synthetic Sentience system, analyze this perception data: {input_text}"
     return ai_generate(prompt)
 

@@ -38,14 +38,14 @@ def parse_command_for_intent(command):
     return "UNKNOWN_INTENT"
 
 
-def handle_intent_command(intent, params=None, ai_module=None):
+def handle_intent_command(intent, params=None, ai_module=None, consciousness_module=None):
     params = params or []
     handlers = {
         "LOAD_INTENT": lambda: print(f"Loading intent from: {params}"),
         "SAVE_INTENT": lambda: print(f"Saving intent to: {params}"),
         "EXECUTE_INTENT": lambda: print(f"Executing intent: {params}"),
         "ANALYZE_INTENT": lambda: print(f"Analyzing intent: {params}"),
-        "AI_COMMAND": lambda: handle_ai_command(params, ai_module=ai_module),
+        "AI_COMMAND": lambda: handle_ai_command(params, ai_module=ai_module, consciousness_module=consciousness_module),
     }
     handler = handlers.get(intent)
     if handler:
@@ -55,7 +55,7 @@ def handle_intent_command(intent, params=None, ai_module=None):
     return False
 
 
-def handle_ai_command(args, ai_module=None):
+def handle_ai_command(args, ai_module=None, consciousness_module=None):
     if not args or args[0] in ("", "ai"):
         print("AI system commands:")
         print("  ai status              - Display AI system status")
@@ -92,7 +92,7 @@ def handle_ai_command(args, ai_module=None):
         "memory": lambda: ai_module.ai_toggle_memory_integration() if hasattr(ai_module, "ai_toggle_memory_integration") else None,
         "generate": lambda: ai_module.ai_generate(" ".join(rest)) if rest and hasattr(ai_module, "ai_generate") else None,
         "introspect": lambda: ai_module.ai_introspect() if hasattr(ai_module, "ai_introspect") else None,
-        "consciousness": lambda: handle_consciousness_command(rest, ai_module),
+        "consciousness": lambda: handle_consciousness_command(rest, consciousness_module),
     }
 
     fn = dispatch.get(cmd)
@@ -102,7 +102,7 @@ def handle_ai_command(args, ai_module=None):
         print(f"Unknown AI command: {cmd}")
 
 
-def handle_consciousness_command(args, ai_module=None):
+def handle_consciousness_command(args, consciousness_module=None):
     if not args:
         print("Usage: ai consciousness [status|model|level|reflect|research|models]")
         return
@@ -110,31 +110,32 @@ def handle_consciousness_command(args, ai_module=None):
     cmd = args[0]
     rest = args[1:] if len(args) > 1 else []
 
-    if ai_module is None:
-        print(f"Consciousness command: {cmd} (no AI module loaded)")
+    if consciousness_module is None:
+        print(f"Consciousness command: {cmd} (no consciousness module loaded)")
         return
 
     if cmd == "status":
-        model = getattr(ai_module, "CONSCIOUSNESS_MODEL", "unknown")
-        level = getattr(ai_module, "CONSCIOUSNESS_LEVEL", 0)
+        model = getattr(consciousness_module, "CONSCIOUSNESS_MODEL", "unknown")
+        level = getattr(consciousness_module, "CONSCIOUSNESS_LEVEL", 0)
         print(f"Consciousness Status:\n  Model: {model}\n  Level: {level}/5")
     elif cmd == "model" and rest:
-        if hasattr(ai_module, "set_consciousness_model"):
-            ai_module.set_consciousness_model(rest[0])
+        if hasattr(consciousness_module, "set_consciousness_model"):
+            consciousness_module.set_consciousness_model(rest[0])
     elif cmd == "level" and rest:
-        if hasattr(ai_module, "set_consciousness_level"):
-            ai_module.set_consciousness_level(int(rest[0]))
+        if hasattr(consciousness_module, "set_consciousness_level"):
+            consciousness_module.set_consciousness_level(int(rest[0]))
     elif cmd == "reflect":
-        if hasattr(ai_module, "perform_self_reflection"):
-            ai_module.perform_self_reflection()
+        if hasattr(consciousness_module, "perform_self_reflection"):
+            consciousness_module.perform_self_reflection()
     elif cmd == "research":
-        if hasattr(ai_module, "get_latest_consciousness_research"):
-            ai_module.get_latest_consciousness_research()
+        if hasattr(consciousness_module, "get_latest_consciousness_research"):
+            consciousness_module.get_latest_consciousness_research()
     elif cmd == "models":
-        models = getattr(ai_module, "CONSCIOUSNESS_MODELS", [])
-        names = getattr(ai_module, "CONSCIOUSNESS_MODEL_NAMES", [])
+        models = getattr(consciousness_module, "CONSCIOUSNESS_MODELS", [])
+        names = getattr(consciousness_module, "CONSCIOUSNESS_MODEL_NAMES", [])
         print("Available Consciousness Models:")
         for m, n in zip(models, names):
             print(f"  {m} - {n}")
     else:
         print(f"Unknown consciousness command: {cmd}")
+

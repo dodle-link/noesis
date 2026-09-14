@@ -7,80 +7,47 @@ import os
 import sys
 import subprocess
 import importlib.util
-import time
 
-NOESIS_VERSION = "2.2.0"
-
-GREEN = "\033[32m"
-BLUE = "\033[34m"
-YELLOW = "\033[33m"
-RED = "\033[31m"
-PINK = "\033[38;5;213m"
-ORANGE = "\033[38;5;208m"
-PURPLE = "\033[38;5;92m"
-CYAN = "\033[96m"
-NC = "\033[0m"
+NOESIS_VERSION = "2.3.0"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-VERBOSE_MODE = False
-MAX_COMMAND_HISTORY = 50
-command_history = []
-history_count = 0
+
+_console = None
+_orchestrator = None
 
 
-def log_with_timestamp(message, level="INFO"):
-    ts = time.strftime("%d %b %Y %H:%M:%S")
-    epoch = int(time.time())
-    days = epoch // 86400
-    colors = {"ERROR": RED, "WARNING": YELLOW, "SUCCESS": GREEN, "DEBUG": BLUE}
-    color = colors.get(level, PINK)
-    print()
-    print(f"{color}    {level}    {NC}")
-    print()
-    print(f"{color}    Time: {ts}    {NC}")
-    print(f"{color}    Unix Time: {days} days {epoch} seconds    {NC}")
-    print()
-    print(f"{color}    {message}    {NC}")
-    print()
+def _load_module(rel_path, key):
+    path = os.path.join(SCRIPT_DIR, *rel_path.split('/'))
+    spec = importlib.util.spec_from_file_location(key, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
-def handle_error(message, code=1):
-    log_with_timestamp(message, "ERROR")
-    return code
+def _get_console():
+    global _console
+    if _console is None:
+        _console = _load_module("system/control/console.py", "console")
+    return _console
 
 
-def init_command_history():
-    global command_history, history_count
-    command_history = []
-    history_count = 0
-    log_with_timestamp("Command history initialized", "DEBUG")
-
-
-def add_to_history(command):
-    global history_count
-    if not command or (command_history and command == command_history[0]):
-        return
-    command_history.insert(0, command)
-    if len(command_history) > MAX_COMMAND_HISTORY:
-        command_history.pop()
-    history_count = len(command_history)
-
-
-def show_history():
-    if not command_history:
-        print("No command history available")
-        return
-    print("Command history (most recent first):")
-    print()
-    for i, cmd in enumerate(command_history, 1):
-        print(f"{i:3d}: {cmd}")
+def _get_orchestrator():
+    global _orchestrator
+    if _orchestrator is None:
+        path = os.path.join(SCRIPT_DIR, "system", "control", "orchestrator.py")
+        if not os.path.isfile(path):
+            print(f"{_get_console().RED}Error: system/control/orchestrator.py not found{_get_console().NC}")
+            sys.exit(1)
+        _orchestrator = _load_module("system/control/orchestrator.py", "orchestrator")
+    return _orchestrator
 
 
 def print_banner():
-    print(f"{PINK}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{NC}")
-    print(f"{PINK}  NOESIS v{NOESIS_VERSION}            {NC}")
-    print(f"{PINK}  Synthetic Sentience SYSTEM         {NC}")
-    print(f"{PINK}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{NC}")
+    c = _get_console()
+    print(f"{c.PINK}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{c.NC}")
+    print(f"{c.PINK}  NOESIS v{NOESIS_VERSION}            {c.NC}")
+    print(f"{c.PINK}  Synthetic Sentience SYSTEM         {c.NC}")
+    print(f"{c.PINK}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{c.NC}")
     print()
 
 
@@ -107,21 +74,23 @@ def show_help():
 
 
 def check_python_version_compatibility():
+    c = _get_console()
     minor = sys.version_info.minor
     if minor >= 13:
         ver = f"{sys.version_info.major}.{sys.version_info.minor}"
-        print(f"{YELLOW}WARNING: Python {ver} detected.{NC}")
-        print(f"{YELLOW}This version may have compatibility issues with PyTorch.{NC}")
-        print(f"{YELLOW}Using compatibility mode for AI features.{NC}")
+        print(f"{c.YELLOW}WARNING: Python {ver} detected.{c.NC}")
+        print(f"{c.YELLOW}This version may have compatibility issues with PyTorch.{c.NC}")
+        print(f"{c.YELLOW}Using compatibility mode for AI features.{c.NC}")
         print()
         return False
     return True
 
 
 def check_for_updates():
-    print(f"{YELLOW}Checking for updates...{NC}")
+    c = _get_console()
+    print(f"{c.YELLOW}Checking for updates...{c.NC}")
     if not _command_exists("git"):
-        print(f"{RED}Error: Git is not installed. Cannot check for updates.{NC}")
+        print(f"{c.RED}Error: Git is not installed. Cannot check for updates.{c.NC}")
         return False
 
     import tempfile, shutil
@@ -132,10 +101,11 @@ def check_for_updates():
             capture_output=True, cwd=tmp_dir
         )
         if r.returncode != 0:
-            print(f"{RED}Error: Could not connect to the repository.{NC}")
+            print(f"{c.RED}Error: Could not connect to the repository.{c.NC}")
             return False
 
         run_fish = os.path.join(tmp_dir, "noesis", "run.fish")
+        latest = None
         if os.path.isfile(run_fish):
             with open(run_fish) as f:
                 for line in f:
@@ -145,9 +115,9 @@ def check_for_updates():
                         latest = m.group(1)
                         break
             if latest == NOESIS_VERSION:
-                print(f"{GREEN}You are already running the latest version (v{NOESIS_VERSION}).{NC}")
+                print(f"{c.GREEN}You are already running the latest version (v{NOESIS_VERSION}).{c.NC}")
             else:
-                print(f"{GREEN}A new version is available: v{latest} (you have v{NOESIS_VERSION}){NC}")
+                print(f"{c.GREEN}A new version is available: v{latest} (you have v{NOESIS_VERSION}){c.NC}")
         return True
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -158,20 +128,8 @@ def _command_exists(cmd):
     return shutil.which(cmd) is not None
 
 
-def _load_intent():
-    intent_path = os.path.join(SCRIPT_DIR, "soul", "intent.py")
-    if not os.path.isfile(intent_path):
-        print(f"{RED}Error: soul/intent.py not found{NC}")
-        sys.exit(1)
-    spec = importlib.util.spec_from_file_location("intent", intent_path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
 def noesis_main(args):
-    global VERBOSE_MODE
-    init_command_history()
+    c = _get_console()
     check_python_version_compatibility()
 
     if args:
@@ -187,30 +145,31 @@ def noesis_main(args):
             if os.path.isfile(status_path):
                 subprocess.run([sys.executable, status_path])
             else:
-                log_with_timestamp("Terminal status script not found", "ERROR")
+                c.log_with_timestamp("Terminal status script not found", "ERROR")
         elif cmd == "test":
-            log_with_timestamp("Running Noesis tests...", "INFO")
+            c.log_with_timestamp("Running Noesis tests...", "INFO")
             test_path = os.path.join(SCRIPT_DIR, "tools", "test.py")
             if os.path.isfile(test_path):
                 r = subprocess.run([sys.executable, test_path])
                 sys.exit(r.returncode)
-            log_with_timestamp("All tests completed successfully", "SUCCESS")
+            c.log_with_timestamp("All tests completed successfully", "SUCCESS")
         elif cmd in ("-q", "--quantum"):
-            log_with_timestamp("Starting Noesis in quantum mode...", "INFO")
-            intent = _load_intent()
-            intent.main(["--quantum"])
+            c.log_with_timestamp("Starting Noesis in quantum mode...", "INFO")
+            orchestrator = _get_orchestrator()
+            orchestrator.main(["--quantum"])
         elif cmd == "verbose":
-            VERBOSE_MODE = not VERBOSE_MODE
-            state = "enabled" if VERBOSE_MODE else "disabled"
-            log_with_timestamp(f"Verbose mode {state}", "INFO")
+            orchestrator = _get_orchestrator()
+            orchestrator.VERBOSE_MODE = not orchestrator.VERBOSE_MODE
+            state = "enabled" if orchestrator.VERBOSE_MODE else "disabled"
+            c.log_with_timestamp(f"Verbose mode {state}", "INFO")
         else:
-            log_with_timestamp(f"Unknown option: {cmd}", "ERROR")
+            c.log_with_timestamp(f"Unknown option: {cmd}", "ERROR")
             show_help()
             sys.exit(1)
     else:
         print_banner()
-        intent = _load_intent()
-        intent.main([])
+        orchestrator = _get_orchestrator()
+        orchestrator.main([])
 
 
 if __name__ == "__main__":

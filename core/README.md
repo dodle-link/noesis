@@ -1,4 +1,4 @@
-# Noesis v2.2.0
+# Noesis v2.3.0
 
 ![Noesis Logo](noesis-logo.jpg)
 
@@ -7,6 +7,11 @@
 ## Overview
 
 Noesis is a Synthetic Sentienceness simulation engine designed to explore the principles of artificial consciousness and cognition. All subsystems are implemented in Python.
+
+### Soul vs. System
+
+- **`soul/`** is the permanent self: identity, the logic/reasoning engine and self-narrative. It never boots, orchestrates or duplicates any subsystem — it only knows how to reason and describe itself, through the stable `process_intent_api` entry point used by external callers (e.g. the gateway).
+- **`system/`** is the body: the replaceable machinery of life — memory, perception, emotion, cognition and control — including `system/control/orchestrator.py`, which boots the subsystems, runs the REPL and routes commands. All shared console/logging/history helpers live in `system/control/console.py` so they exist in exactly one place.
 
 ## AI Installation Options
 
@@ -40,16 +45,19 @@ Noesis includes several methods to install AI dependencies, depending on your ne
 ### Directory Structure
 ```
 core/
-├── soul/                                  # Consciousness core implementation
-│   └── intent.py                          # Intent processing system
-├── system/                                # System components
+├── soul/                                  # The permanent self: identity, reasoning, self-narrative
+│   └── intent.py                          # Logic engine, reasoning and the process_intent_api entry point
+├── system/                                # The body: subsystems that process life, never the identity itself
 │   ├── cognition/                         # AI integration with Hugging Face models
 │   │   ├── consciousness.py               # Consciousness theories implementation
 │   │   ├── service_py13.py                # Python 3.13 service layer
 │   │   ├── test_ai.py                     # AI testing framework
 │   │   └── unit.py                        # AI core module
-│   ├── control/                           # Control subsystems
-│   │   ├── intent_shell.py                # Shell command processor
+│   ├── control/                           # Control subsystems: boot, routing and shared console I/O
+│   │   ├── console.py                     # Shared colors, logging and history helpers
+│   │   ├── orchestrator.py                # Boots subsystems, runs the REPL, routes intentions
+│   │   ├── intent_shell.py                # AI/consciousness command shell
+│   │   ├── noe_shell.py                   # .noe state file command shell
 │   │   └── limbic/                        # Limbic system
 │   │       └── unit.py
 │   ├── emotion/                           # Emotion processing
@@ -91,7 +99,7 @@ This repository is licensed under the [MIT License](LICENSE).
 
 ## AI and Consciousness Integration
 
-Noesis v2.2.0 includes AI integration with free models from Hugging Face to enhance Synthetic Sentienceness capabilities. Located in the `system/cognition` directory, the system implements various consciousness theories:
+Noesis v2.3.0 includes AI integration with free models from Hugging Face to enhance Synthetic Sentienceness capabilities. Located in the `system/cognition` directory, the system implements various consciousness theories:
 
 - **Integrated Information Theory (IIT)**: Focuses on integration and differentiation of information
 - **Global Workspace Theory (GWT)**: Models consciousness as global broadcasting of information
