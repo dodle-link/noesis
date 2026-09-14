@@ -168,7 +168,8 @@ def process_intention(intention, history, add_to_history_fn):
         expression = intention[len("logic "):].strip()
         log_with_timestamp(f"Evaluating logical expression: {expression}", "DEBUG")
         if soul:
-            result = soul._evaluate_logical_expression(expression)
+            evaluator = getattr(soul, 'evaluate_logical_expression', None)
+            result = evaluator(expression) if evaluator else soul.UNKNOWN
             if result != soul.UNKNOWN:
                 if result == soul.TRUE:
                     log_with_timestamp("Expression evaluates to TRUE", "SUCCESS")

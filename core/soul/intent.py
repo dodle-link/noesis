@@ -12,6 +12,7 @@
 
 import re
 import sys
+from typing import Callable, Optional
 
 NOESIS_VERSION = "2.3.0"
 
@@ -33,6 +34,14 @@ _SYMBOL_OPERATORS = (
     (re.compile(r"(^|[\s(])!\s*\S"), "NOT", LOGIC_NOT),
 )
 
+_WORD_OPERATORS = (
+    (re.compile(r"(?i)(?<![A-Za-z])AND(?![A-Za-z])"), "AND", LOGIC_AND),
+    (re.compile(r"(?i)(?<![A-Za-z])OR(?![A-Za-z])"), "OR", LOGIC_OR),
+    (re.compile(r"(?i)(?<![A-Za-z])NOT(?![A-Za-z])"), "NOT", LOGIC_NOT),
+    (re.compile(r"(?i)(?<![A-Za-z])XOR(?![A-Za-z])"), "XOR", LOGIC_XOR),
+    (re.compile(r"(?i)(?<![A-Za-z])IMPLIES(?![A-Za-z])"), "IMPLIES", LOGIC_IMPLIES),
+)
+
 
 def init_logic_system():
     print("Logic system initialized")
@@ -43,7 +52,7 @@ def init_intent_system():
     print("Intent system initialized")
 
 
-def evaluate_boolean(a, operator, b):
+def evaluate_boolean(a: int, operator: int, b: Optional[int]) -> int:
     if operator == LOGIC_AND:
         return TRUE if a == TRUE and b == TRUE else FALSE
     elif operator == LOGIC_OR:
@@ -57,7 +66,7 @@ def evaluate_boolean(a, operator, b):
     return UNKNOWN
 
 
-def _normalize_expression(expression):
+def _normalize_expression(expression: object) -> str:
     if expression is None:
         return ""
     if not isinstance(expression, str):
@@ -65,7 +74,12 @@ def _normalize_expression(expression):
     return " ".join(expression.strip().split())
 
 
-def parse_logical_expression(expression, announce=True):
+def _announce_operator(label: str, announce: bool) -> None:
+    if announce:
+        print(f"{label} operation detected")
+
+
+def parse_logical_expression(expression: object, announce: bool = True) -> int:
     expression = _normalize_expression(expression)
     if not expression:
         if announce:
@@ -74,39 +88,19 @@ def parse_logical_expression(expression, announce=True):
 
     for pattern, label, operator in _SYMBOL_OPERATORS:
         if pattern.search(expression):
-            if announce:
-                print(f"{label} operation detected")
+            _announce_operator(label, announce)
             return operator
 
-    word_tokens = set(re.findall(r"[A-Za-z]+", expression))
-    upper_tokens = {token.upper() for token in word_tokens}
-
-    if "AND" in upper_tokens and re.search(r"(?i)(?<![A-Za-z])AND(?![A-Za-z])", expression):
-        if announce:
-            print("AND operation detected")
-        return LOGIC_AND
-    elif "OR" in upper_tokens and re.search(r"(?i)(?<![A-Za-z])OR(?![A-Za-z])", expression):
-        if announce:
-            print("OR operation detected")
-        return LOGIC_OR
-    elif "NOT" in upper_tokens and re.search(r"(?i)(?<![A-Za-z])NOT(?![A-Za-z])", expression):
-        if announce:
-            print("NOT operation detected")
-        return LOGIC_NOT
-    elif "XOR" in upper_tokens and re.search(r"(?i)(?<![A-Za-z])XOR(?![A-Za-z])", expression):
-        if announce:
-            print("XOR operation detected")
-        return LOGIC_XOR
-    elif "IMPLIES" in upper_tokens and re.search(r"(?i)(?<![A-Za-z])IMPLIES(?![A-Za-z])", expression):
-        if announce:
-            print("IMPLIES operation detected")
-        return LOGIC_IMPLIES
+    for pattern, label, operator in _WORD_OPERATORS:
+        if pattern.search(expression):
+            _announce_operator(label, announce)
+            return operator
     if announce:
         print("Unknown logical expression")
     return UNKNOWN
 
 
-def _evaluate_logical_expression(expression, announce=True):
+def evaluate_logical_expression(expression: object, announce: bool = True) -> int:
     expression = _normalize_expression(expression)
     operator = parse_logical_expression(expression, announce=announce)
     if operator == UNKNOWN:
@@ -115,12 +109,17 @@ def _evaluate_logical_expression(expression, announce=True):
     return evaluate_boolean(TRUE, operator, right_operand)
 
 
-def reason_about(problem):
+def _evaluate_logical_expression(expression: object, announce: bool = True) -> int:
+    """Backward-compatible alias for callers using the old private helper."""
+    return evaluate_logical_expression(expression, announce=announce)
+
+
+def reason_about(problem: object) -> None:
     for line in _reason_about_lines(problem):
         print(line)
 
 
-def _reason_about_lines(problem):
+def _reason_about_lines(problem: object) -> list[str]:
     return [
         f"Reasoning about: {problem}",
         "Analyzing problem components...",
@@ -139,7 +138,7 @@ def _pixel_context_message(context: str) -> str:
 
     try:
         energy = float(parts.get("energy", 100))
-    except ValueError:
+    except (TypeError, ValueError):
         energy = 100
     excited = parts.get("excited", "false").lower() == "true"
 
@@ -162,13 +161,13 @@ def _process_pixel_context(context: str) -> None:
 
 def _logic_api_response(expression: str) -> str:
     expression = _normalize_expression(expression)
-    result = _evaluate_logical_expression(expression, announce=False)
+    result = evaluate_logical_expression(expression, announce=False)
     if result == UNKNOWN:
         return f"Unknown logical expression: {expression}"
     return f"Logic result: {'TRUE' if result == TRUE else 'FALSE'}"
 
 
-def process_intent_api(text: str) -> str:
+def process_intent_api(text: object) -> str:
     """Programmatic entry point — no stdin interaction. Returns response as string."""
     if text is None:
         text = ""
@@ -178,17 +177,19 @@ def process_intent_api(text: str) -> str:
 
     text_lower = text.lower()
 
-    try:
-        if text_lower.startswith("pixel:"):
-            response = _pixel_context_message(text[len("pixel:"):])
-        elif text_lower.startswith("reason about "):
-            response = "\n".join(_reason_about_lines(text[len("reason about "):].strip()))
-        elif text_lower.startswith("logic "):
-            response = _logic_api_response(text[len("logic "):].strip())
-        else:
-            response = "\n".join(_reason_about_lines(text))
-    except Exception as e:
-        return f"System error: {e}"
+    handlers: tuple[tuple[str, Callable[[str], str]], ...] = (
+        ("pixel:", _pixel_context_message),
+        ("reason about ", lambda value: "\n".join(_reason_about_lines(value.strip()))),
+        ("logic ", lambda value: _logic_api_response(value.strip())),
+    )
+    response = next(
+        (
+            handler(text[len(prefix):])
+            for prefix, handler in handlers
+            if text_lower.startswith(prefix)
+        ),
+        "\n".join(_reason_about_lines(text)),
+    )
     return response if response else f"Intent processed: {text}"
 
 
