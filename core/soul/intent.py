@@ -16,6 +16,34 @@ import re
 import sys
 from typing import Callable, Optional
 
+NOESIS_VERSION = "2.3.0"
+
+LOGIC_AND = 0
+LOGIC_OR = 1
+LOGIC_NOT = 2
+LOGIC_XOR = 3
+LOGIC_IMPLIES = 4
+
+TRUE = 1
+FALSE = 0
+UNKNOWN = -1
+
+_SYMBOL_OPERATORS = (
+    (re.compile(r"\S\s*=>\s*\S"), "IMPLIES", LOGIC_IMPLIES),
+    (re.compile(r"\S\s*&&\s*\S"), "AND", LOGIC_AND),
+    (re.compile(r"\S\s*\|\|\s*\S"), "OR", LOGIC_OR),
+    (re.compile(r"\S\s*\^\s*\S"), "XOR", LOGIC_XOR),
+    (re.compile(r"(^|[\s(])!\s*\S"), "NOT", LOGIC_NOT),
+)
+
+_WORD_OPERATORS = (
+    (re.compile(r"(?i)(?<![A-Za-z])AND(?![A-Za-z])"), "AND", LOGIC_AND),
+    (re.compile(r"(?i)(?<![A-Za-z])OR(?![A-Za-z])"), "OR", LOGIC_OR),
+    (re.compile(r"(?i)(?<![A-Za-z])NOT(?![A-Za-z])"), "NOT", LOGIC_NOT),
+    (re.compile(r"(?i)(?<![A-Za-z])XOR(?![A-Za-z])"), "XOR", LOGIC_XOR),
+    (re.compile(r"(?i)(?<![A-Za-z])IMPLIES(?![A-Za-z])"), "IMPLIES", LOGIC_IMPLIES),
+)
+
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(_MODULE_DIR))
 _PARSER_PATH = os.path.join(_PROJECT_ROOT, "noe-lang", "parser", "v2.0.0", "noe_parser.py")
@@ -99,35 +127,6 @@ def save_noe_state(file_path, field_name, defines):
 
 def state_file(name):
     return os.path.join(STATE_DIR, f"{name}.noe")
-
-
-NOESIS_VERSION = "2.3.0"
-
-LOGIC_AND = 0
-LOGIC_OR = 1
-LOGIC_NOT = 2
-LOGIC_XOR = 3
-LOGIC_IMPLIES = 4
-
-TRUE = 1
-FALSE = 0
-UNKNOWN = -1
-
-_SYMBOL_OPERATORS = (
-    (re.compile(r"\S\s*=>\s*\S"), "IMPLIES", LOGIC_IMPLIES),
-    (re.compile(r"\S\s*&&\s*\S"), "AND", LOGIC_AND),
-    (re.compile(r"\S\s*\|\|\s*\S"), "OR", LOGIC_OR),
-    (re.compile(r"\S\s*\^\s*\S"), "XOR", LOGIC_XOR),
-    (re.compile(r"(^|[\s(])!\s*\S"), "NOT", LOGIC_NOT),
-)
-
-_WORD_OPERATORS = (
-    (re.compile(r"(?i)(?<![A-Za-z])AND(?![A-Za-z])"), "AND", LOGIC_AND),
-    (re.compile(r"(?i)(?<![A-Za-z])OR(?![A-Za-z])"), "OR", LOGIC_OR),
-    (re.compile(r"(?i)(?<![A-Za-z])NOT(?![A-Za-z])"), "NOT", LOGIC_NOT),
-    (re.compile(r"(?i)(?<![A-Za-z])XOR(?![A-Za-z])"), "XOR", LOGIC_XOR),
-    (re.compile(r"(?i)(?<![A-Za-z])IMPLIES(?![A-Za-z])"), "IMPLIES", LOGIC_IMPLIES),
-)
 
 
 def init_logic_system():
