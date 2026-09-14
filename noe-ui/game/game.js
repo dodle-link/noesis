@@ -381,6 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
       this.y = margin + Math.random() * (canvas.height - margin * 2);
       this.rotation = Math.random() * Math.PI;
       this.pulse = 0;
+      this.collected = false;
 
       if (type === 'REGULAR') {
         this.color = '#39ffba';
@@ -512,7 +513,7 @@ document.addEventListener('DOMContentLoaded', () => {
         this.focus.x = player.x + Math.cos(this.orbitAngle) * orbitRadius;
         this.focus.y = player.y + Math.sin(this.orbitAngle) * orbitRadius;
       } else if (this.intent === 'CURIOUS') {
-        if (!this.focusCube || !cubes.includes(this.focusCube)) {
+        if (!this.focusCube || this.focusCube.collected) {
           if (cubes.length > 0) {
             this.focusCube = cubes[Math.floor(Math.random() * cubes.length)];
           } else {
@@ -837,6 +838,7 @@ document.addEventListener('DOMContentLoaded', () => {
           particles.push(new Particle(c.x, c.y, c.color, 120, 0.5));
         }
 
+        c.collected = true;
         cubes.splice(i, 1);
       }
     }
