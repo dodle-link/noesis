@@ -612,9 +612,3 @@ input:checked + .slider:before {
     aspect-ratio: 3 / 4;
   }
 }
-
-@media (max-width: 420px) and (orientation: portrait) {
-  .viewport-wrapper {
-    aspect-ratio: 10 / 13;
-  }
-}
