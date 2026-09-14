@@ -254,6 +254,31 @@ input:checked + .slider:before {
   z-index: 20;
 }
 
+.crt-overlay.scanlines.vignette {
+  opacity: 1;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.18),
+      rgba(0, 0, 0, 0.18) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    radial-gradient(
+      circle at center,
+      transparent 65%,
+      rgba(0, 0, 0, 0.6) 100%
+    );
+}
+
+.crt-overlay.crt-flicker-overlay::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  animation: crt-flicker-anim 0.15s infinite alternate;
+  background: rgba(255, 255, 255, 0.05);
+}
+
 .scanlines {
   background: repeating-linear-gradient(
     0deg,
@@ -274,9 +299,7 @@ input:checked + .slider:before {
 }
 
 .crt-flicker-overlay {
-  animation: crt-flicker-anim 0.15s infinite alternate;
-  opacity: 0.03;
-  background: rgba(255, 255, 255, 0.05);
+  background: none;
 }
 
 @keyframes crt-flicker-anim {
@@ -543,4 +566,3 @@ input:checked + .slider:before {
     aspect-ratio: 3 / 4;
   }
 }
-
