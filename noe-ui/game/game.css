@@ -25,7 +25,7 @@ html {
 }
 
 body {
-  background-color: #0b0c10;
+  background-color: black;
   color: #e0e6ed;
   font-family: 'HKGrotesk', -apple-system, BlinkMacSystemFont, sans-serif;
   height: 100vh;
@@ -57,7 +57,7 @@ body {
 }
 
 .back-link {
-  color: #39ffba;
+  color: white;
   text-decoration: none;
   font-weight: bold;
   font-size: 0.95rem;
@@ -65,24 +65,22 @@ body {
   align-items: center;
   gap: 5px;
   transition: transform 0.2s ease, color 0.2s ease;
-  border: 1px solid rgba(57, 255, 186, 0.3);
+  border: 1px solid white;
   padding: 5px 12px;
   border-radius: 20px;
-  background: rgba(57, 255, 186, 0.05);
 }
 
 .back-link:hover {
   color: #ffffff;
-  background: rgba(57, 255, 186, 0.2);
+  background: black;
   transform: translateX(-3px);
-  box-shadow: 0 0 10px rgba(57, 255, 186, 0.4);
+  box-shadow: 0 0 10px black;
 }
 
 .game-title {
   font-family: 'HKGrotesk-Bold', sans-serif;
   font-size: 1.4rem;
-  color: #39ffba;
-  text-shadow: 0 0 10px rgba(57, 255, 186, 0.6);
+  color: white;
   letter-spacing: 1px;
 }
 
@@ -99,7 +97,7 @@ body {
   align-items: center;
   gap: 8px;
   font-size: 0.85rem;
-  color: #a0aec0;
+  color: white;
   cursor: pointer;
 }
 
@@ -120,10 +118,10 @@ body {
   position: absolute;
   cursor: pointer;
   top: 0; left: 0; right: 0; bottom: 0;
-  background-color: #2d3748;
+  background-color: black;
   transition: 0.3s;
   border-radius: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid white;
 }
 
 .slider:before {
@@ -153,10 +151,9 @@ input:checked + .slider:before {
   position: relative;
   width: 100%;
   max-width: 900px;
-  background: #141622;
-  border: 3px solid #2a2e45;
+  background: black;
+  border: 3px solid white;
   border-radius: 16px;
-  box-shadow: 0 0 30px rgba(0, 0, 0, 0.8), inset 0 0 15px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -168,9 +165,9 @@ input:checked + .slider:before {
   grid-template-columns: 1.5fr 1fr 1fr 1fr;
   align-items: center;
   gap: 15px;
-  background: #1a1d2e;
+  background: black;
   padding: 10px 20px;
-  border-bottom: 2px solid #2a2e45;
+  border-bottom: 2px solid black;
   font-size: 0.9rem;
 }
 
@@ -183,7 +180,7 @@ input:checked + .slider:before {
 .hud-label {
   font-size: 0.7rem;
   text-transform: uppercase;
-  color: #718096;
+  color: black;
   letter-spacing: 1px;
   font-weight: bold;
 }
@@ -357,7 +354,7 @@ input:checked + .slider:before {
   gap: 20px;
   margin-top: 10px;
   font-size: 0.85rem;
-  color: #718096;
+  color: black;
 }
 
 .key-badge {
