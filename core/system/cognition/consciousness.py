@@ -14,10 +14,12 @@ def _get_state_io():
     global _state_io
     if _state_io:
         return _state_io
-    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "noe", "state_io.py")
+    path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "core", "soul", "intent.py"))
     if not os.path.isfile(path):
         return None
-    spec = importlib.util.spec_from_file_location("state_io", path)
+    spec = importlib.util.spec_from_file_location("intent_state_io", path)
+    if spec is None or spec.loader is None:
+        return None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     _state_io = mod
