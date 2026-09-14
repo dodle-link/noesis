@@ -446,55 +446,152 @@ document.addEventListener('DOMContentLoaded', () => {
       this.color = '#ff3b5c';
       this.vx = (Math.random() - 0.5) * this.speed;
       this.vy = (Math.random() - 0.5) * this.speed;
+      this.intent = 'WANDER';
+      this.intentTimer = 0;
+      this.focus = { x: this.x, y: this.y };
+      this.orbitAngle = Math.random() * Math.PI * 2;
+      this.pulseOffset = Math.random() * Math.PI * 2;
+      this.pulse = 0;
+      this.blinkTimer = 0.8 + Math.random() * 1.2;
+      this.blinkDuration = 0;
+      this.lookX = 0;
+      this.lookY = 0;
+    }
+
+    chooseIntent() {
+      if (!player) return;
+
+      const roll = Math.random();
+      if (energy < 30 || roll < 0.45) {
+        this.intent = 'HUNT';
+        this.focus.x = player.x;
+        this.focus.y = player.y;
+      } else if (roll < 0.75) {
+        this.intent = 'OBSERVE';
+        this.orbitAngle = Math.random() * Math.PI * 2;
+      } else if (cubes.length > 0) {
+        const focusCube = cubes[Math.floor(Math.random() * cubes.length)];
+        this.intent = 'CURIOUS';
+        this.focus.x = focusCube.x;
+        this.focus.y = focusCube.y;
+      } else {
+        this.intent = 'WANDER';
+        this.focus.x = this.radius + Math.random() * (canvas.width - this.radius * 2);
+        this.focus.y = this.radius + Math.random() * (canvas.height - this.radius * 2);
+      }
     }
 
     update(dt) {
-      // Slowly steer towards player
-      if (player) {
-        const dx = player.x - this.x;
-        const dy = player.y - this.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist > 0) {
-          this.vx += (dx / dist) * 80 * dt;
-          this.vy += (dy / dist) * 80 * dt;
+      this.intentTimer -= dt;
+      if (this.intentTimer <= 0) {
+        this.chooseIntent();
+        this.intentTimer = 0.6 + Math.random() * 1.2;
+      }
 
-          // Cap speed
-          const curSpeed = Math.hypot(this.vx, this.vy);
-          if (curSpeed > this.speed) {
-            this.vx = (this.vx / curSpeed) * this.speed;
-            this.vy = (this.vy / curSpeed) * this.speed;
+      if (this.intent === 'HUNT' && player) {
+        this.focus.x = player.x;
+        this.focus.y = player.y;
+      } else if (this.intent === 'OBSERVE' && player) {
+        this.orbitAngle += dt * (1.4 + this.speed / 220);
+        const orbitRadius = 70 + this.radius * 3;
+        this.focus.x = player.x + Math.cos(this.orbitAngle) * orbitRadius;
+        this.focus.y = player.y + Math.sin(this.orbitAngle) * orbitRadius;
+      } else if (this.intent === 'CURIOUS' && cubes.length > 0) {
+        let nearest = cubes[0];
+        let nearestDist = Infinity;
+        for (const cube of cubes) {
+          const cd = Math.hypot(cube.x - this.x, cube.y - this.y);
+          if (cd < nearestDist) {
+            nearest = cube;
+            nearestDist = cd;
           }
         }
+        this.focus.x = nearest.x;
+        this.focus.y = nearest.y;
+      } else if (this.intent === 'WANDER') {
+        const focusDist = Math.hypot(this.focus.x - this.x, this.focus.y - this.y);
+        if (focusDist < 20) {
+          this.focus.x = this.radius + Math.random() * (canvas.width - this.radius * 2);
+          this.focus.y = this.radius + Math.random() * (canvas.height - this.radius * 2);
+        }
+      }
+
+      const dx = this.focus.x - this.x;
+      const dy = this.focus.y - this.y;
+      const dist = Math.hypot(dx, dy) || 1;
+
+      const steerPower = this.intent === 'HUNT'
+        ? 120
+        : this.intent === 'OBSERVE'
+          ? 80
+          : 65;
+
+      this.vx += (dx / dist) * steerPower * dt;
+      this.vy += (dy / dist) * steerPower * dt;
+
+      // Small autonomous drift to avoid robotic movement
+      this.vx += (Math.random() - 0.5) * 16 * dt;
+      this.vy += (Math.random() - 0.5) * 16 * dt;
+
+      const curSpeed = Math.hypot(this.vx, this.vy);
+      if (curSpeed > this.speed) {
+        this.vx = (this.vx / curSpeed) * this.speed;
+        this.vy = (this.vy / curSpeed) * this.speed;
       }
 
       this.x += this.vx * dt;
       this.y += this.vy * dt;
 
       // Bounce off boundaries
-      if (this.x < this.radius || this.x > canvas.width - this.radius) this.vx *= -1;
-      if (this.y < this.radius || this.y > canvas.height - this.radius) this.vy *= -1;
+      if (this.x < this.radius || this.x > canvas.width - this.radius) {
+        this.vx *= -0.9;
+        this.x = Math.max(this.radius, Math.min(canvas.width - this.radius, this.x));
+      }
+      if (this.y < this.radius || this.y > canvas.height - this.radius) {
+        this.vy *= -0.9;
+        this.y = Math.max(this.radius, Math.min(canvas.height - this.radius, this.y));
+      }
+
+      this.pulse = Math.sin(Date.now() * 0.008 + this.pulseOffset) * 1.8;
+      this.lookX += ((dx / dist) - this.lookX) * Math.min(1, dt * 7);
+      this.lookY += ((dy / dist) - this.lookY) * Math.min(1, dt * 7);
+
+      this.blinkTimer -= dt;
+      if (this.blinkTimer <= 0) {
+        this.blinkDuration = 0.05 + Math.random() * 0.08;
+        this.blinkTimer = 1.2 + Math.random() * 2.2;
+      }
+      if (this.blinkDuration > 0) {
+        this.blinkDuration -= dt;
+      }
     }
 
     draw() {
       ctx.save();
       ctx.translate(this.x, this.y);
+      ctx.rotate(Math.atan2(this.vy, this.vx) * 0.25);
 
-      // Glitchy erratic offset
-      const jitterX = (Math.random() - 0.5) * 3;
-      const jitterY = (Math.random() - 0.5) * 3;
+      const bodyW = this.radius * 1.35 + this.pulse;
+      const bodyH = this.radius * 0.9 + this.pulse * 0.4;
 
       ctx.fillStyle = this.color;
       ctx.shadowColor = this.color;
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 12;
+      ctx.fillRect(-bodyW / 2, -bodyH / 2, bodyW, bodyH);
+      ctx.shadowBlur = 0;
 
-      // Draw jagged star/diamond shape
-      ctx.beginPath();
-      ctx.moveTo(jitterX, -this.radius + jitterY);
-      ctx.lineTo(this.radius + jitterX, jitterY);
-      ctx.lineTo(jitterX, this.radius + jitterY);
-      ctx.lineTo(-this.radius + jitterX, jitterY);
-      ctx.closePath();
-      ctx.fill();
+      const eyeOffsetX = this.lookX * (bodyW * 0.2);
+      const eyeOffsetY = this.lookY * (bodyH * 0.22);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      if (this.blinkDuration > 0) {
+        ctx.fillRect(-2 + eyeOffsetX, -0.5 + eyeOffsetY, 4, 1.2);
+      } else {
+        ctx.fillRect(-1.8 + eyeOffsetX, -1.8 + eyeOffsetY, 3.6, 3.6);
+      }
+
+      ctx.strokeStyle = 'rgba(255, 160, 180, 0.9)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(-bodyW / 2, -bodyH / 2, bodyW, bodyH);
 
       ctx.restore();
     }
