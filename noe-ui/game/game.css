@@ -180,7 +180,7 @@ input:checked + .slider:before {
 .hud-label {
   font-size: 0.7rem;
   text-transform: uppercase;
-  color: black;
+  color: white;
   letter-spacing: 1px;
   font-weight: bold;
 }
@@ -354,7 +354,7 @@ input:checked + .slider:before {
   gap: 20px;
   margin-top: 10px;
   font-size: 0.85rem;
-  color: black;
+  color: white;
 }
 
 .key-badge {
