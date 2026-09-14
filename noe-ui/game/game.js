@@ -450,7 +450,7 @@ document.addEventListener('DOMContentLoaded', () => {
       this.intentTimer = 0;
       this.focus = { x: this.x, y: this.y };
       this.orbitAngle = Math.random() * Math.PI * 2;
-      this.pulseOffset = Math.random() * Math.PI * 2;
+      this.pulseTime = Math.random() * Math.PI * 2;
       this.pulse = 0;
       this.blinkTimer = 0.8 + Math.random() * 1.2;
       this.blinkDuration = 0;
@@ -552,7 +552,8 @@ document.addEventListener('DOMContentLoaded', () => {
         this.y = Math.max(this.radius, Math.min(canvas.height - this.radius, this.y));
       }
 
-      this.pulse = Math.sin(Date.now() * 0.008 + this.pulseOffset) * 1.8;
+      this.pulseTime += dt * 5.5;
+      this.pulse = Math.sin(this.pulseTime) * 1.8;
       this.lookX += ((dx / dist) - this.lookX) * Math.min(1, dt * 7);
       this.lookY += ((dy / dist) - this.lookY) * Math.min(1, dt * 7);
 
