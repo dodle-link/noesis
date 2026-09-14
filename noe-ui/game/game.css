@@ -42,6 +42,7 @@ html {
 
 body {
   background:
+    linear-gradient(180deg, rgba(5, 8, 22, 0.82) 0%, rgba(5, 8, 22, 0.9) 100%),
     radial-gradient(circle at top, rgba(255, 255, 255, 0.14), transparent 28%),
     linear-gradient(180deg, var(--noe-pink) 0%, var(--noe-cyan) 100%);
   color: var(--noe-text);
@@ -422,12 +423,6 @@ input:checked + .slider:before {
 
 /* Responsive adjustments */
 @media (max-width: 650px) {
-  body {
-    justify-content: flex-start;
-    padding: 10px 10px 16px;
-    gap: 10px;
-  }
-
   .game-header {
     justify-content: center;
     text-align: center;
