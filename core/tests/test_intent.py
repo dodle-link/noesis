@@ -41,9 +41,17 @@ class IntentApiTests(unittest.TestCase):
         response = self.intent.process_intent_api("logic ORDINARY")
         self.assertEqual(response, "Unknown logical expression: ORDINARY")
 
+    def test_logic_not_word_form_is_case_insensitive(self):
+        response = self.intent.process_intent_api("logic not a")
+        self.assertEqual(response, "Logic result: FALSE")
+
     def test_logic_api_response_is_not_polluted_by_detection_logs(self):
         response = self.intent.process_intent_api("logic A AND B")
         self.assertEqual(response, "Logic result: FALSE")
+
+    def test_logic_none_input_is_handled_gracefully(self):
+        response = self.intent.process_intent_api(None)
+        self.assertEqual(response, "Intent processed: ")
 
 
 if __name__ == "__main__":

@@ -104,32 +104,47 @@ def evaluate_boolean(a, operator, b):
     return UNKNOWN
 
 
+def _normalize_expression(expression):
+    if expression is None:
+        return ""
+    if not isinstance(expression, str):
+        expression = str(expression)
+    return " ".join(expression.strip().split())
+
+
 def parse_logical_expression(expression, announce=True):
+    expression = _normalize_expression(expression)
+    if not expression:
+        if announce:
+            print("Unknown logical expression")
+        return UNKNOWN
+
     for pattern, label, operator in _SYMBOL_OPERATORS:
         if pattern.search(expression):
             if announce:
                 print(f"{label} operation detected")
             return operator
 
-    tokens = set(re.findall(r"[A-Z]+", expression.upper()))
+    word_tokens = set(re.findall(r"[A-Za-z]+", expression))
+    upper_tokens = {token.upper() for token in word_tokens}
 
-    if "AND" in tokens:
+    if "AND" in upper_tokens and re.search(r"(?i)(?<![A-Za-z])AND(?![A-Za-z])", expression):
         if announce:
             print("AND operation detected")
         return LOGIC_AND
-    elif "OR" in tokens:
+    elif "OR" in upper_tokens and re.search(r"(?i)(?<![A-Za-z])OR(?![A-Za-z])", expression):
         if announce:
             print("OR operation detected")
         return LOGIC_OR
-    elif "NOT" in tokens:
+    elif "NOT" in upper_tokens and re.search(r"(?i)(?<![A-Za-z])NOT(?![A-Za-z])", expression):
         if announce:
             print("NOT operation detected")
         return LOGIC_NOT
-    elif "XOR" in tokens:
+    elif "XOR" in upper_tokens and re.search(r"(?i)(?<![A-Za-z])XOR(?![A-Za-z])", expression):
         if announce:
             print("XOR operation detected")
         return LOGIC_XOR
-    elif "IMPLIES" in tokens:
+    elif "IMPLIES" in upper_tokens and re.search(r"(?i)(?<![A-Za-z])IMPLIES(?![A-Za-z])", expression):
         if announce:
             print("IMPLIES operation detected")
         return LOGIC_IMPLIES
@@ -139,6 +154,7 @@ def parse_logical_expression(expression, announce=True):
 
 
 def _evaluate_logical_expression(expression, announce=True):
+    expression = _normalize_expression(expression)
     operator = parse_logical_expression(expression, announce=announce)
     if operator == UNKNOWN:
         return UNKNOWN
@@ -461,6 +477,7 @@ def _pixel_context_message(context: str) -> str:
 
 
 def _logic_api_response(expression: str) -> str:
+    expression = _normalize_expression(expression)
     result = _evaluate_logical_expression(expression, announce=False)
     if result == UNKNOWN:
         return f"Unknown logical expression: {expression}"
@@ -469,7 +486,12 @@ def _logic_api_response(expression: str) -> str:
 
 def process_intent_api(text: str) -> str:
     """Programmatic entry point — no stdin interaction. Returns response as string."""
-    text = text.strip()
+    if text is None:
+        text = ""
+    text = str(text).strip()
+    if not text:
+        return "Intent processed: "
+
     text_lower = text.lower()
 
     try:
