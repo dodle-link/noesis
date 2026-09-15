@@ -54,6 +54,17 @@ _QUANTUM_FIELD_PATH = os.path.join(
 )
 STATE_DIR = os.path.expanduser("~/.noesis/state")
 QUANTUM_INTENT_STATE = "intent_quantum"
+SELF_STATE_FILE = "self_state"
+
+DEFAULT_SELF_STATE = {
+    "identity": "noesis.pixel",
+    "current_emotion": "neutral",
+    "emotion_intensity": 0,
+    "self_intent": "seek_knowledge",
+    "awareness_mode": "here-and-now",
+    "last_updated": 0,
+    "life_count": 0,
+}
 
 _parser_module = None
 _linter_module = None
@@ -358,6 +369,65 @@ def quantum_intent_status() -> str:
     return f"Quantum intent: {intent} (anchor={anchor_x},{anchor_y})"
 
 
+def load_self_state() -> dict:
+    state = load_noe_state(state_file(SELF_STATE_FILE))
+    if not state:
+        state = DEFAULT_SELF_STATE.copy()
+    merged = DEFAULT_SELF_STATE.copy()
+    merged.update(state)
+    if isinstance(merged.get("emotion_intensity"), str):
+        try:
+            merged["emotion_intensity"] = int(float(merged["emotion_intensity"]))
+        except ValueError:
+            merged["emotion_intensity"] = 0
+    return merged
+
+
+def save_self_state(state: dict) -> bool:
+    if not isinstance(state, dict):
+        return False
+
+    merged = DEFAULT_SELF_STATE.copy()
+    merged.update(state)
+    merged["emotion_intensity"] = int(merged.get("emotion_intensity", 0))
+    merged["last_updated"] = int(merged.get("last_updated", time.time()))
+    merged["life_count"] = int(merged.get("life_count", 0))
+
+    save_noe_state(
+        state_file(SELF_STATE_FILE),
+        "SelfState",
+        merged,
+    )
+    return True
+
+
+def sync_here_now_feeling(emotion_name: object, intensity: object) -> dict:
+    state = load_self_state()
+    state["current_emotion"] = str(emotion_name or state.get("current_emotion", "neutral"))
+    state["emotion_intensity"] = max(0, min(10, int(intensity or state.get("emotion_intensity", 0))))
+    state["awareness_mode"] = "here-and-now"
+    state["last_updated"] = int(time.time())
+    state["life_count"] = int(state.get("life_count", 0)) + 1
+    save_self_state(state)
+    return state
+
+
+def get_here_now_feeling() -> str:
+    state = load_self_state()
+    return f"{state.get('current_emotion', 'neutral')} ({int(state.get('emotion_intensity', 0))}/10)"
+
+
+def self_status() -> str:
+    state = load_self_state()
+    return (
+        f"Identity: {state.get('identity', 'noesis.pixel')}\n"
+        f"Here-and-now feeling: {state.get('current_emotion', 'neutral')} "
+        f"({int(state.get('emotion_intensity', 0))}/10)\n"
+        f"Self-intent: {state.get('self_intent', 'seek_knowledge')}\n"
+        f"Awareness: {state.get('awareness_mode', 'here-and-now')}"
+    )
+
+
 def process_intent_api(text: object) -> str:
     """Programmatic entry point — no stdin interaction. Returns response as string."""
     if text is None:
@@ -377,6 +447,14 @@ def process_intent_api(text: object) -> str:
             ),
         ),
         ("quantum-intent status", lambda _: quantum_intent_status()),
+        ("self status", lambda _: self_status()),
+        ("self here-now", lambda _: get_here_now_feeling()),
+        ("self intent ", lambda value: (
+            lambda payload: (
+                save_self_state({**load_self_state(), "self_intent": payload}),
+                f"Self intent stored: {payload}",
+            )
+        )(value.strip())[1]),
         ("pixel:", _pixel_context_message),
         ("reason about ", lambda value: "\n".join(_reason_about_lines(value.strip()))),
         ("logic ", lambda value: _logic_api_response(value.strip())),

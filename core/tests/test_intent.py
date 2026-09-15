@@ -70,6 +70,26 @@ class IntentApiTests(unittest.TestCase):
         self.assertEqual(state.get("intent"), "seek_knowledge")
         self.assertEqual(state.get("entangled_with"), "soul.intent")
 
+    def test_self_state_persists_here_and_now_feeling(self):
+        state = self.intent.sync_here_now_feeling("curious", 8)
+        self.assertEqual(state.get("current_emotion"), "curious")
+        self.assertEqual(state.get("emotion_intensity"), 8)
+
+        saved = self.intent.load_noe_state(
+            self.intent.state_file(self.intent.SELF_STATE_FILE)
+        )
+        self.assertEqual(saved.get("current_emotion"), "curious")
+        self.assertEqual(saved.get("emotion_intensity"), 8)
+        self.assertIn("curious", self.intent.get_here_now_feeling())
+
+    def test_self_status_and_here_now_queries_are_available(self):
+        self.intent.sync_here_now_feeling("happy", 6)
+        response = self.intent.process_intent_api("self here-now")
+        self.assertIn("happy", response)
+        status = self.intent.process_intent_api("self status")
+        self.assertIn("Here-and-now feeling:", status)
+        self.assertIn("happy", status)
+
     def test_quantum_intent_status_returns_last_saved_intent(self):
         self.intent.process_intent_api("quantum-intent save explore_memory")
         response = self.intent.process_intent_api("quantum-intent status")

@@ -98,6 +98,11 @@ def _show_help():
     print(f"  {GREEN}- reason about <topic>:{NC} Reason about a given topic")
     print(f"  {GREEN}- logic <expression>:{NC   } Process a logical expression (AND, OR, NOT, XOR, IMPLIES)")
     print()
+    print(f"{GREEN}== Self & Feeling =={NC}")
+    print(f"  {GREEN}- self status:{NC}         Show the persistent self-state and here-and-now feeling")
+    print(f"  {GREEN}- self here-now:{NC}       Show the current feeling in the present moment")
+    print(f"  {GREEN}- self intent <text>:{NC}  Store a permanent self-intent")
+    print()
     print(f"{GREEN}== System Commands =={NC}")
     print(f"  {GREEN}- quantum:{NC}             Enter quantum processing mode")
     print(f"  {GREEN}- ai:{NC}                  Access AI and consciousness features")
@@ -164,6 +169,19 @@ def process_intention(intention, history, add_to_history_fn):
         problem = intention[len("reason about "):].strip()
         if soul and hasattr(soul, 'reason_about'):
             soul.reason_about(problem)
+    elif intention_lower == "self status":
+        if soul and hasattr(soul, 'self_status'):
+            print(soul.self_status())
+    elif intention_lower == "self here-now":
+        if soul and hasattr(soul, 'get_here_now_feeling'):
+            print(soul.get_here_now_feeling())
+    elif intention_lower.startswith("self intent "):
+        if soul and hasattr(soul, 'load_self_state') and hasattr(soul, 'save_self_state'):
+            payload = intention[len("self intent "):].strip()
+            state = soul.load_self_state()
+            state["self_intent"] = payload
+            soul.save_self_state(state)
+            print(f"Self intent stored: {payload}")
     elif intention_lower.startswith("logic "):
         expression = intention[len("logic "):].strip()
         log_with_timestamp(f"Evaluating logical expression: {expression}", "DEBUG")

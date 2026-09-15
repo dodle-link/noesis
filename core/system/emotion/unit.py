@@ -67,6 +67,16 @@ def init_emotion_system():
     print("Emotion system initialized")
 
 
+def sync_to_soul():
+    soul = _get_state_io()
+    if soul and hasattr(soul, "sync_here_now_feeling"):
+        return soul.sync_here_now_feeling(
+            emotion_to_string(current_emotion),
+            emotion_intensity,
+        )
+    return None
+
+
 def set_emotion(emotion, intensity=5):
     global current_emotion, emotion_intensity
     if emotion is None:
@@ -74,12 +84,13 @@ def set_emotion(emotion, intensity=5):
     intensity = max(0, min(10, int(intensity)))
     current_emotion = emotion
     emotion_intensity = intensity
-    print(f"Emotion changed: {emotion_to_string(emotion)} (intensity: {intensity})")
     sio = _get_state_io()
     if sio:
         sio.save_noe_state(sio.state_file("emotion"), "EmotionState", {
             "emotion": current_emotion, "intensity": emotion_intensity,
         })
+    sync_to_soul()
+    print(f"Emotion changed: {emotion_to_string(emotion)} (intensity: {intensity})")
     return True
 
 
