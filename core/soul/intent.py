@@ -14,6 +14,7 @@ import importlib.util
 import os
 import re
 import sys
+import time
 from typing import Callable, Optional
 
 NOESIS_VERSION = "2.3.0"
@@ -48,10 +49,15 @@ _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(_MODULE_DIR))
 _PARSER_PATH = os.path.join(_PROJECT_ROOT, "noe-lang", "parser", "v2.0.0", "noe_parser.py")
 _LINTER_PATH = os.path.join(_PROJECT_ROOT, "noe-lang", "lint", "v2.0.0", "noe_lint.py")
+_QUANTUM_FIELD_PATH = os.path.join(
+    _PROJECT_ROOT, "system", "memory", "quantum", "quantum_field.py"
+)
 STATE_DIR = os.path.expanduser("~/.noesis/state")
+QUANTUM_INTENT_STATE = "intent_quantum"
 
 _parser_module = None
 _linter_module = None
+_quantum_field_module = None
 
 
 def _load_mod(path):
@@ -77,6 +83,13 @@ def load_linter():
     if not _linter_module:
         _linter_module = _load_mod(_LINTER_PATH)
     return _linter_module
+
+
+def load_quantum_field():
+    global _quantum_field_module
+    if not _quantum_field_module:
+        _quantum_field_module = _load_mod(_QUANTUM_FIELD_PATH)
+    return _quantum_field_module
 
 
 def _coerce(val):
@@ -293,6 +306,58 @@ def _logic_api_response(expression: str) -> str:
     return f"Logic result: {'TRUE' if result == TRUE else 'FALSE'}"
 
 
+def _quantum_anchor_coordinates(intent_text: str) -> tuple[int, int]:
+    qfield = load_quantum_field()
+    size = int(getattr(qfield, "FIELD_SIZE", 10)) if qfield else 10
+    if size <= 0:
+        size = 10
+    signature = sum(ord(ch) for ch in intent_text)
+    x = signature % size
+    y = (signature // max(1, size)) % size
+    return x, y
+
+
+def save_intent_to_quantum_field(intent_text: object) -> bool:
+    intent_text = _normalize_expression(intent_text)
+    if not intent_text:
+        return False
+
+    timestamp = int(time.time())
+    x, y = _quantum_anchor_coordinates(intent_text)
+    amplitude = round(min(1.0, max(0.1, len(intent_text) / 100.0)), 3)
+
+    save_noe_state(
+        state_file(QUANTUM_INTENT_STATE),
+        "QuantumIntentState",
+        {
+            "intent": intent_text,
+            "anchor_x": x,
+            "anchor_y": y,
+            "amplitude": amplitude,
+            "saved_at": timestamp,
+            "entangled_with": "soul.intent",
+        },
+    )
+
+    qfield = load_quantum_field()
+    if qfield and hasattr(qfield, "apply_field_perturbation"):
+        try:
+            qfield.apply_field_perturbation(x, y, amplitude)
+        except Exception:
+            pass
+    return True
+
+
+def quantum_intent_status() -> str:
+    state = load_noe_state(state_file(QUANTUM_INTENT_STATE))
+    intent = state.get("intent")
+    if not intent:
+        return "Quantum intent field is empty."
+    anchor_x = state.get("anchor_x", 0)
+    anchor_y = state.get("anchor_y", 0)
+    return f"Quantum intent: {intent} (anchor={anchor_x},{anchor_y})"
+
+
 def process_intent_api(text: object) -> str:
     """Programmatic entry point — no stdin interaction. Returns response as string."""
     if text is None:
@@ -303,6 +368,15 @@ def process_intent_api(text: object) -> str:
 
     text_lower = text.lower()
     handlers: tuple[tuple[str, Callable[[str], str]], ...] = (
+        (
+            "quantum-intent save ",
+            lambda value: (
+                f"Quantum intent stored: {value.strip()}"
+                if save_intent_to_quantum_field(value.strip())
+                else "Quantum intent save skipped: empty payload."
+            ),
+        ),
+        ("quantum-intent status", lambda _: quantum_intent_status()),
         ("pixel:", _pixel_context_message),
         ("reason about ", lambda value: "\n".join(_reason_about_lines(value.strip()))),
         ("logic ", lambda value: _logic_api_response(value.strip())),

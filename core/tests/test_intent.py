@@ -2,6 +2,8 @@
 
 import importlib.util
 import os
+import shutil
+import tempfile
 import unittest
 
 
@@ -20,6 +22,12 @@ class IntentApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.intent = _load_intent_module()
+        cls._tmp_state_dir = tempfile.mkdtemp(prefix="intent-tests-")
+        cls.intent.STATE_DIR = cls._tmp_state_dir
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls._tmp_state_dir, ignore_errors=True)
 
     def test_logic_command_is_case_insensitive(self):
         response = self.intent.process_intent_api("logic a and b")
@@ -52,6 +60,20 @@ class IntentApiTests(unittest.TestCase):
     def test_logic_none_input_is_handled_gracefully(self):
         response = self.intent.process_intent_api(None)
         self.assertEqual(response, "Intent processed: ")
+
+    def test_quantum_intent_save_persists_soul_intent_state(self):
+        response = self.intent.process_intent_api("quantum-intent save seek_knowledge")
+        self.assertEqual(response, "Quantum intent stored: seek_knowledge")
+        state = self.intent.load_noe_state(
+            self.intent.state_file(self.intent.QUANTUM_INTENT_STATE)
+        )
+        self.assertEqual(state.get("intent"), "seek_knowledge")
+        self.assertEqual(state.get("entangled_with"), "soul.intent")
+
+    def test_quantum_intent_status_returns_last_saved_intent(self):
+        self.intent.process_intent_api("quantum-intent save explore_memory")
+        response = self.intent.process_intent_api("quantum-intent status")
+        self.assertIn("Quantum intent: explore_memory", response)
 
 
 if __name__ == "__main__":
