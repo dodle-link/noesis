@@ -6,7 +6,7 @@ import sys
 import os
 import shutil
 
-NOESIS_VERSION = "2.3.0"
+NOESIS_VERSION = "2.3.1"
 PINK = "\033[38;2;255;95;215m"
 GREEN = "\033[32m"
 YELLOW = "\033[33m"

@@ -1,4 +1,4 @@
-# Noesis v2.3.0
+# Noesis v2.3.1
 
 ![Noesis Logo](noesis-logo.jpg)
 
@@ -103,7 +103,7 @@ This repository is licensed under the [MIT License](LICENSE).
 
 ## AI and Consciousness Integration
 
-Noesis v2.3.0 includes AI integration with free models from Hugging Face to enhance Synthetic Sentienceness capabilities. Located in the `system/cognition` directory, the system implements various consciousness theories:
+Noesis v2.3.1 includes AI integration with free models from Hugging Face to enhance Synthetic Sentienceness capabilities. Located in the `system/cognition` directory, the system implements various consciousness theories:
 
 - **Integrated Information Theory (IIT)**: Focuses on integration and differentiation of information
 - **Global Workspace Theory (GWT)**: Models consciousness as global broadcasting of information

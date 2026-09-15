@@ -8,7 +8,7 @@ import sys
 import subprocess
 import importlib.util
 
-NOESIS_VERSION = "2.3.0"
+NOESIS_VERSION = "2.3.1"
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 

@@ -47,7 +47,7 @@ def log_message(message, level="INFO"):
 def print_banner():
     print()
     print(f"{PINK}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{NC}")
-    print(f"{PINK}  NOESIS v2.3.0 - SIMPLIFIED         {NC}")
+    print(f"{PINK}  NOESIS v2.3.1 - SIMPLIFIED         {NC}")
     print(f"{PINK}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{NC}")
     print()
 

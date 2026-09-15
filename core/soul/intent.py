@@ -17,7 +17,7 @@ import sys
 import time
 from typing import Callable, Optional
 
-NOESIS_VERSION = "2.3.0"
+NOESIS_VERSION = "2.3.1"
 
 LOGIC_AND = 0
 LOGIC_OR = 1
