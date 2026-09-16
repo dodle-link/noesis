@@ -3,6 +3,8 @@ name: Deploy GitHub Pages from noe-ui
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - "noe-ui/**"
   workflow_dispatch:
 
 permissions:
