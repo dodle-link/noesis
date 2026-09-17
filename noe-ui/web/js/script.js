@@ -24,7 +24,8 @@
     </div>
     <div class="header-buttons">
       <button class="theme-toggle" type="button" aria-label="Switch to dark mode" aria-pressed="false">
-        <span class="theme-toggle-icon" aria-hidden="true">&#9788;</span>
+        <span class="theme-toggle-icon theme-toggle-sun" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path></svg></span>
+        <span class="theme-toggle-icon theme-toggle-moon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.4 15.5A9 9 0 0 1 8.5 3.6 9 9 0 1 0 20.4 15.5Z"></path></svg></span>
       </button>
       <label class="language-switcher">
         <span class="sr-only">Language</span>
@@ -109,7 +110,6 @@ function setTheme(isDark) {
   if (!themeToggle) return;
   themeToggle.setAttribute("aria-pressed", String(isDark));
   themeToggle.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
-  themeToggle.querySelector(".theme-toggle-icon").textContent = isDark ? "\u263E" : "\u2600";
 }
 
 setTheme(savedTheme === "dark");
