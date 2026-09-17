@@ -1298,6 +1298,11 @@ body.dark-mode .theme-toggle-moon {
     grid-template-columns: 1fr;
   }
 
+  #booking {
+    width: calc(100vw - 48px);
+    margin-left: calc(50% - 50vw + 24px);
+  }
+
   .rooms-grid,
   .amenities-grid,
   .testimonial-grid,
