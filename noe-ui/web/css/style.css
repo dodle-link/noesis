@@ -867,7 +867,7 @@ body.dark-mode .theme-toggle-moon {
 }
 
 .faq-question .icon {
-  font-size: 1.2rem;
+  font-size: 2rem;
   color: var(--color-accent);
   transition: transform 0.2s ease;
 }
@@ -1009,7 +1009,7 @@ body.dark-mode .theme-toggle-moon {
 .field textarea {
   width: 100%;
   border: 1px solid var(--color-border);
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: #fff;
   padding: 12px 14px;
   font-size: 0.96rem;
