@@ -3,7 +3,7 @@
 /* ===== Base ===== */
 :root {
   --color-bg: #faf8f5;
-  --color-dark: #321a3e;
+  --color-dark: #444444;
   --color-accent: #8f6bb3;
   --color-accent-banner: #ededed;
   --color-muted: #6f6a63;
@@ -12,7 +12,7 @@
   --color-surface-alt: #e4e4e4;
   --color-input: #fff;
   --max-width: 1100px;
-  --radius: 4px;
+  --radius: 38px;
 }
 
 * {
@@ -23,6 +23,10 @@
 
 html {
   scroll-behavior: smooth;
+}
+
+.add-padding-bottom {
+  padding-bottom: 130px;
 }
 
 /* ===== Cursor follower ===== */
@@ -470,8 +474,8 @@ body.dark-mode .theme-toggle-moon {
   pointer-events: none;
   background: url("../img/home-banner.jpg") center / cover no-repeat;
   filter: brightness(1);
-  -webkit-mask-image: radial-gradient(circle 150px at var(--spotlight-x, -100px) var(--spotlight-y, -100px), #000 0, transparent 100%);
-  mask-image: radial-gradient(circle 150px at var(--spotlight-x, -100px) var(--spotlight-y, -100px), #000 0, transparent 100%);
+  -webkit-mask-image: radial-gradient(circle 300px at var(--spotlight-x, -300px) var(--spotlight-y, -300px), #000 0, transparent 100%);
+  mask-image: radial-gradient(circle 300px at var(--spotlight-x, -300px) var(--spotlight-y, -300px), #000 0, transparent 100%);
 }
 
 .home-page .hero-inner {
@@ -947,7 +951,7 @@ body.dark-mode .theme-toggle-moon {
   padding: 16px 18px;
   border: 1px solid var(--color-border);
   border-radius: 14px;
-  background: #f9f5f0;
+  background: #ececec;
 }
 
 .info-badge {
@@ -1078,6 +1082,7 @@ body.dark-mode .theme-toggle-moon {
 .newsletter {
   background: #e4e4e4;
   text-align: center;
+  padding-bottom: 110px;
 }
 
 .newsletter-form {
@@ -1097,10 +1102,26 @@ body.dark-mode .theme-toggle-moon {
 
 /* ===== Footer ===== */
 .site-footer {
+  position: relative;
   background: #16150f;
   color: #cfc8bd;
-  padding: 60px 0 24px;
-  margin-top: auto;
+  padding: 80px 0 24px;
+  margin-top: -50px;
+  overflow: hidden;
+  border-top-left-radius: 50px;
+  border-top-right-radius: 50px;
+}
+
+.site-footer::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -52px;
+  width: 140%;
+  height: 120px;
+  transform: translateX(-50%);
+  background: inherit;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
 }
 
 .footer-grid {
