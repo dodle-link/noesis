@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Rooms &amp; Suites — Heiwa Hotel</title>
+<meta name="description" content="Browse Heiwa Hotel's rooms and suites, check rates, and book your stay online." />
+<link rel="stylesheet" href="css/style.css" />
+<link rel="stylesheet" href="css/flatpickr.min.css" />
+<link rel="icon" type="image/png" href="favicon-96x96.png" sizes="96x96" />
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="shortcut icon" href="favicon.ico" />
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-title" content="HEIVA" />
+<link rel="manifest" href="site.webmanifest" />
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<section class="hero page-hero">
+  <div class="hero-inner">
+    <span class="eyebrow">Accommodations</span>
+    <h1>Rooms &amp; Suites</h1>
+    <div id="booking-marker"></div>
+    <p>Every room is designed for rest, with quality linens,<br>quiet AC, and honest pricing.</p>
+  </div>
+</section>
+
+<div class="container">
+  <form class="booking-widget booking-form" id="booking">
+    <div class="field field-daterange">
+      <label for="dates">Check-in — Check-out</label>
+      <input type="text" id="dates" class="date-range-input" placeholder="Select dates" required />
+      <input type="hidden" id="check-in" name="check-in" />
+      <input type="hidden" id="check-out" name="check-out" />
+    </div>
+    <div class="field">
+      <label for="guests">Guests</label>
+      <select id="guests" name="guests">
+        <option>1 Guest</option>
+        <option selected>2 Guests</option>
+        <option>3 Guests</option>
+        <option>4+ Guests</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="room-type">Room Type</label>
+      <select id="room-type" name="room-type">
+        <option>Standard Room</option>
+        <option>Deluxe Room</option>
+        <option>Ocean Suite</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Check Availability</button>
+  </form>
+  <p class="form-message" role="status"></p>
+</div>
+
+<div id="standard-room"></div>
+
+<section id="rooms">
+  <div class="container">
+    <div class="room-detail">
+      <div class="room-image"></div>
+      <div>
+        <h2>Standard Room</h2>
+        <div class="room-meta"><span>2 Guests</span><span>28 m²</span><span>City View</span></div>
+        <p>A calm, well-lit room with a queen bed, work desk, and rain shower. Ideal for solo travelers or couples on a short stay.</p>
+        <ul class="amenity-list">
+          <li>Queen bed</li>
+          <li>Free Wi-Fi</li>
+          <li>Air conditioning</li>
+          <li>Rain shower</li>
+          <li>Mini fridge</li>
+          <li>Daily housekeeping</li>
+        </ul>
+        <div id="deluxe-room"></div>
+        <div class="room-price">$89 <span>/ night</span></div>
+        <a href="#booking-marker" class="btn btn-primary" style="margin-top:16px;">Reserve This Room</a>
+      </div>
+    </div>
+
+    <div class="room-detail">
+      <div class="room-image"></div>
+      <div>
+        <h2>Deluxe Room</h2>
+        <div class="room-meta"><span>2 Guests</span><span>36 m²</span><span>Garden View</span></div>
+        <p>More space, a reading corner, and a deep soaking tub. Perfect for guests staying longer and wanting extra comfort.</p>
+        <ul class="amenity-list">
+          <li>King bed</li>
+          <li>Free Wi-Fi</li>
+          <li>Soaking tub</li>
+          <li>Reading nook</li>
+          <li>Mini bar</li>
+          <li>Turndown service</li>
+        </ul>
+        <div id="ocean-suite"></div>
+        <div class="room-price">$129 <span>/ night</span></div>
+        <a href="#booking-marker" class="btn btn-primary" style="margin-top:16px;">Reserve This Room</a>
+      </div>
+    </div>
+
+    <div class="room-detail">
+      <div class="room-image"></div>
+      <div>
+        <h2>Ocean Suite</h2>
+        <div class="room-meta"><span>4 Guests</span><span>52 m²</span><span>Ocean View</span></div>
+        <p>Our largest suite, with a private balcony facing the water, a separate living area, and premium bath amenities.</p>
+        <ul class="amenity-list">
+          <li>King bed + sofa bed</li>
+          <li>Private balcony</li>
+          <li>Living area</li>
+          <li>Espresso machine</li>
+          <li>Bathtub &amp; rain shower</li>
+          <li>Priority housekeeping</li>
+        </ul>
+        <div class="room-price">$219 <span>/ night</span></div>
+        <a href="#booking-marker" class="btn btn-primary" style="margin-top:16px;">Reserve This Room</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="testimonials">
+  <div class="container">
+    <div class="section-header">
+      <span class="eyebrow">Policies</span>
+      <h2>Good to Know</h2>
+    </div>
+    <div class="amenities-grid">
+      <div class="amenity-card">
+        <div class="amenity-icon"></div>
+        <h3>Check-in / Check-out</h3>
+        <p>Check-in from 3:00 PM, check-out by 11:00 AM. Early check-in on request.</p>
+      </div>
+      <div class="amenity-card">
+        <div class="amenity-icon"></div>
+        <h3>Free Cancellation</h3>
+        <p>Cancel up to 48 hours before arrival for a full refund.</p>
+      </div>
+      <div class="amenity-card">
+        <div class="amenity-icon"></div>
+        <h3>Pet Friendly</h3>
+        <p>Small pets welcome in select rooms with advance notice.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="container">
+    <h2>Found your room?</h2>
+    <p>Reach out and we'll help you finalize your reservation.</p>
+    <a href="contact.html" class="btn">Contact Us</a>
+  </div>
+</section>
+
+<div id="site-footer"></div>
+
+<script src="js/flatpickr.js"></script>
+<script src="js/script.js"></script>
+</body>
+</html>

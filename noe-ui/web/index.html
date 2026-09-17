@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Heiwa Hotel — Minimal Comfort by the Sea</title>
+<meta name="description" content="Heiwa Hotel offers minimal, peaceful stays with modern rooms, amenities, and easy online booking." />
+<link rel="stylesheet" href="css/style.css" />
+<link rel="stylesheet" href="css/flatpickr.min.css" />
+<link rel="icon" type="image/png" href="favicon-96x96.png" sizes="96x96" />
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="shortcut icon" href="favicon.ico" />
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-title" content="HEIVA" />
+<link rel="manifest" href="site.webmanifest" />
+</head>
+<body>
+
+<div id="site-header"></div>
+
+<section class="hero">
+  <div class="hero-inner">
+    <span class="eyebrow">Est. 1998 · Oceanfront Retreat</span>
+    <h1>Quiet Rooms. Calm Mind. Heiwa Hotel.</h1>
+    <p>A minimal hotel designed around rest — clean rooms, honest service, and a view of the sea.</p>
+    <!--div class="hero-actions">
+      <a href="rooms.html#rooms" class="btn btn-primary">View Rooms</a>
+      <a href="#booking" class="btn">Check Availability</a>
+    </div-->
+  </div>
+</section>
+
+<div class="container">
+  <form class="booking-widget booking-form" id="booking">
+    <div class="field field-daterange">
+      <label for="dates">Check-in — Check-out</label>
+      <input type="text" id="dates" class="date-range-input" placeholder="Select dates" required />
+      <input type="hidden" id="check-in" name="check-in" />
+      <input type="hidden" id="check-out" name="check-out" />
+    </div>
+    <div class="field">
+      <label for="guests">Guests</label>
+      <select id="guests" name="guests">
+        <option>1 Guest</option>
+        <option selected>2 Guests</option>
+        <option>3 Guests</option>
+        <option>4+ Guests</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="room-type">Room Type</label>
+      <select id="room-type" name="room-type">
+        <option>Standard Room</option>
+        <option>Deluxe Room</option>
+        <option>Ocean Suite</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Check Availability</button>
+  </form>
+  <p class="form-message" role="status"></p>
+</div>
+
+<section>
+  <div class="container intro">
+    <div class="intro-image"></div>
+    <div>
+      <span class="eyebrow">About Heiwa</span>
+      <h2>A hotel built around simplicity</h2>
+      <p>Heiwa means peace — and that's the only agenda here. Twenty-eight rooms, a small restaurant, a quiet terrace, and staff who remember your name. No clutter, no noise, just a comfortable place to stay.</p>
+      <div class="stats">
+        <div><strong>28</strong><span>Rooms &amp; Suites</span></div>
+        <div><strong>4.8</strong><span>Guest Rating</span></div>
+        <div><strong>25+</strong><span>Years Open</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="section-header">
+      <span class="eyebrow">Stay With Us</span>
+      <h2>Featured Rooms</h2>
+      <p>A small selection of our most-loved rooms and suites.</p>
+    </div>
+    <div class="rooms-grid">
+      <div class="room-card">
+        <div class="room-image"></div>
+        <div class="room-body">
+          <h3>Standard Room</h3>
+          <div class="room-meta"><span>2 Guests</span><span>28 m²</span><span>City View</span></div>
+          <p>A calm, well-lit room with everything you need and nothing you don't.</p>
+          <div class="room-price">$89 <span>/ night</span></div>
+          <a href="rooms.html#standard-room" class="btn btn-block">View Details</a>
+        </div>
+      </div>
+      <div class="room-card">
+        <div class="room-image"></div>
+        <div class="room-body">
+          <h3>Deluxe Room</h3>
+          <div class="room-meta"><span>2 Guests</span><span>36 m²</span><span>Garden View</span></div>
+          <p>More space, a reading corner, and a deep soaking tub.</p>
+          <div class="room-price">$129 <span>/ night</span></div>
+          <a href="rooms.html#deluxe-room" class="btn btn-block">View Details</a>
+        </div>
+      </div>
+      <div class="room-card">
+        <div class="room-image"></div>
+        <div class="room-body">
+          <h3>Ocean Suite</h3>
+          <div class="room-meta"><span>4 Guests</span><span>52 m²</span><span>Ocean View</span></div>
+          <p>Our largest suite, with a private balcony facing the water.</p>
+          <div class="room-price">$219 <span>/ night</span></div>
+          <a href="rooms.html#ocean-suite" class="btn btn-block">View Details</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="testimonials">
+  <div class="container">
+    <div class="section-header">
+      <span class="eyebrow">Guest Reviews</span>
+      <h2>What Our Guests Say</h2>
+    </div>
+    <div class="testimonial-grid">
+      <div class="testimonial-card">
+        <div class="stars">★★★★★</div>
+        <p>"The quietest, cleanest hotel I've stayed at in years. Exactly what I needed."</p>
+        <h4>Mira Tanaka</h4>
+        <span>Tokyo, Japan</span>
+      </div>
+      <div class="testimonial-card">
+        <div class="stars">★★★★★</div>
+        <p>"Simple, honest, and comfortable. The staff went out of their way to help."</p>
+        <h4>James Carter</h4>
+        <span>Austin, USA</span>
+      </div>
+      <div class="testimonial-card">
+        <div class="stars">★★★★☆</div>
+        <p>"Loved the ocean suite. Would happily come back every summer."</p>
+        <h4>Elena Rossi</h4>
+        <span>Milan, Italy</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="container">
+    <h2>Ready for a quiet stay?</h2>
+    <p>Rooms fill quickly during peak season — reserve yours today.</p>
+    <a href="rooms.html" class="btn">Book Your Room</a>
+  </div>
+</section>
+
+<section class="newsletter">
+  <div class="container">
+    <span class="eyebrow">Stay Updated</span>
+    <h2>Join Our Newsletter</h2>
+    <p>Get seasonal offers and updates delivered to your inbox.</p>
+    <form class="newsletter-form">
+      <input type="email" placeholder="Your email address" required />
+      <button type="submit" class="btn btn-primary">Subscribe</button>
+    </form>
+    <p class="form-message" role="status"></p>
+  </div>
+</section>
+
+<div id="site-footer"></div>
+
+<script src="js/flatpickr.js"></script>
+<script src="js/script.js"></script>
+</body>
+</html>
