@@ -77,6 +77,9 @@ body.dark-mode .cursor-circle {
   }
 }
 body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   font-family: "Prompt", "Helvetica Neue", Arial, sans-serif;
   color: var(--color-dark);
   background: var(--color-bg);
@@ -1067,6 +1070,7 @@ h1 {
   background: #16150f;
   color: #cfc8bd;
   padding: 60px 0 24px;
+  margin-top: auto;
 }
 
 .footer-grid {
