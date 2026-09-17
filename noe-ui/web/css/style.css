@@ -1140,8 +1140,15 @@ h1 {
 
 @media (max-width: 800px) {
   .nav {
-    grid-template-columns: 1fr 3fr 4fr 1fr;
-    justify-items: right;
+    grid-template-columns: auto 1fr auto auto;
+    justify-items: end;
+    padding: 16px 24px;
+  }
+
+  .header-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .nav-links {
@@ -1163,6 +1170,7 @@ h1 {
 
   .nav-toggle {
     display: flex;
+    margin-left: 12px;
   }
 
   .theme-toggle {
@@ -1192,8 +1200,26 @@ h1 {
   .amenities-grid,
   .testimonial-grid,
   .gallery-grid,
-  .form-row {
+  .form-row,
+  .contact-info-list {
     grid-template-columns: 1fr;
+  }
+
+  .contact-section {
+    padding-top: 48px;
+  }
+
+  .contact-layout {
+    gap: 24px;
+  }
+
+  .contact-panel {
+    padding: 24px;
+  }
+
+  .map-block {
+    height: 220px;
+    margin-top: 24px;
   }
 
   .footer-grid {
