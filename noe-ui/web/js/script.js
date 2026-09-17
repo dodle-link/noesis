@@ -550,6 +550,12 @@ document.querySelectorAll("select").forEach(enhanceSelect);
 (function bannerSpotlight() {
   const hero = document.querySelector(".home-page .hero");
   if (!hero || window.matchMedia("(hover: none), (pointer: coarse)").matches) return;
+  let fluidExitTimeout;
+
+  hero.addEventListener("mouseenter", () => {
+    clearTimeout(fluidExitTimeout);
+    hero.classList.add("is-spotlighted");
+  });
 
   hero.addEventListener("mousemove", (event) => {
     const bounds = hero.getBoundingClientRect();
@@ -560,6 +566,9 @@ document.querySelectorAll("select").forEach(enhanceSelect);
   hero.addEventListener("mouseleave", () => {
     hero.style.removeProperty("--spotlight-x");
     hero.style.removeProperty("--spotlight-y");
+    fluidExitTimeout = setTimeout(() => {
+      hero.classList.remove("is-spotlighted");
+    }, 2000);
   });
 })();
 
