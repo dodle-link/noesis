@@ -194,6 +194,7 @@ h1 {
   top: 0;
   z-index: 100;
   background: var(--color-bg);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
   border-bottom-left-radius: 40px;
   border-bottom-right-radius: 40px;
   margin-bottom: -40px;
