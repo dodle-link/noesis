@@ -18,7 +18,7 @@
   const headerHTML = `
 <header class="site-header">
   <nav class="nav">
-    <a href="index.html" class="logo">HEIVA</a>
+    <a href="index.html" class="logo">HEIWA</a>
     <div class="nav-links-container">
       <ul class="nav-links">${navLinksHTML}</ul>
     </div>
