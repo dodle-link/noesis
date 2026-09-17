@@ -423,6 +423,30 @@ h1 {
   text-align: center;
 }
 
+.home-page .hero {
+  background-image: linear-gradient(180deg, rgba(17, 35, 46, 0.52), rgba(17, 35, 46, 0.78)),
+    url("../img/home-banner.jpg");
+  position: relative;
+  overflow: hidden;
+}
+
+.home-page .hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: url("../img/home-banner.jpg") center / cover no-repeat;
+  filter: brightness(1.5);
+  -webkit-mask-image: radial-gradient(circle 150px at var(--spotlight-x, -100px) var(--spotlight-y, -100px), #000 0, transparent 100%);
+  mask-image: radial-gradient(circle 150px at var(--spotlight-x, -100px) var(--spotlight-y, -100px), #000 0, transparent 100%);
+}
+
+.home-page .hero-inner {
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+
 .hero-inner {
   max-width: 600px;
   margin: 0 auto;

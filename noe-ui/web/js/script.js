@@ -546,6 +546,23 @@ function enhanceSelect(nativeSelect) {
 
 document.querySelectorAll("select").forEach(enhanceSelect);
 
+// ===== Homepage banner spotlight =====
+(function bannerSpotlight() {
+  const hero = document.querySelector(".home-page .hero");
+  if (!hero || window.matchMedia("(hover: none), (pointer: coarse)").matches) return;
+
+  hero.addEventListener("mousemove", (event) => {
+    const bounds = hero.getBoundingClientRect();
+    hero.style.setProperty("--spotlight-x", `${event.clientX - bounds.left}px`);
+    hero.style.setProperty("--spotlight-y", `${event.clientY - bounds.top}px`);
+  });
+
+  hero.addEventListener("mouseleave", () => {
+    hero.style.removeProperty("--spotlight-x");
+    hero.style.removeProperty("--spotlight-y");
+  });
+})();
+
 // ===== Cursor follower circle =====
 (function cursorFollower() {
   if (window.matchMedia("(hover: none), (pointer: coarse)").matches) return;
