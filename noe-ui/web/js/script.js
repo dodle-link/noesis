@@ -51,9 +51,24 @@
         <a href="index.html" class="footer-logo">Heiwa Hotel</a>
         <p>123 Shoreline Avenue, Coastal Bay, CA 90210</p>
         <div class="social-links">
-          <a href="#" aria-label="Facebook">f</a>
-          <a href="#" aria-label="Instagram">i</a>
-          <a href="#" aria-label="Twitter">t</a>
+          <a href="https://instagram.com" target="_blank" rel="noreferrer" aria-label="Instagram">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <rect x="3.5" y="3.5" width="17" height="17" rx="5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+              <circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+              <circle cx="17.3" cy="6.7" r="1.2" fill="currentColor"/>
+            </svg>
+          </a>
+          <a href="https://youtube.com" target="_blank" rel="noreferrer" aria-label="YouTube">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <rect x="3" y="6" width="18" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/>
+              <path d="M10 9.5l5 2.5-5 2.5v-5z" fill="currentColor"/>
+            </svg>
+          </a>
+          <a href="https://tiktok.com" target="_blank" rel="noreferrer" aria-label="TikTok">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M14.8 3.5c.8 1.4 2 2.2 3.7 2.4v2.6c-1.2-.1-2.2-.4-3.1-.9v6.4a4.5 4.5 0 1 1-4.5-4.5c.3 0 .6 0 .9.1v2.7a2 2 0 1 0 1.4 1.9V3.5h1.6z" fill="currentColor"/>
+            </svg>
+          </a>
         </div>
       </div>
       <div>
