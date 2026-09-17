@@ -252,6 +252,10 @@ h1 {
   background: var(--color-dark);
 }
 
+.nav-close {
+  display: none;
+}
+
 .nav-book {
   border: 1px solid var(--color-dark);
   padding: 8px 20px;
@@ -1271,12 +1275,45 @@ body.dark-mode .theme-toggle-moon {
   }
 
   .nav-links.open {
+    position: fixed;
+    inset: 0;
+    z-index: 150;
     display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100vw;
+    height: 100vh;
+    padding: 24px;
+    font-size: 1.4rem;
+    gap: 32px;
+    border-bottom: none;
+  }
+
+  body.nav-open {
+    overflow: hidden;
   }
 
   .nav-toggle {
     display: flex;
     margin-left: 12px;
+  }
+
+  body.nav-open .nav-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 20px;
+    right: 24px;
+    z-index: 200;
+    width: 40px;
+    height: 40px;
+    font-size: 2rem;
+    line-height: 1;
+    background: none;
+    border: none;
+    color: var(--color-dark);
+    cursor: pointer;
   }
 
   .theme-toggle {

@@ -41,6 +41,7 @@
     <button class="nav-toggle" aria-label="Toggle navigation">
       <span></span><span></span><span></span>
     </button>
+    <button class="nav-close" aria-label="Close navigation">&times;</button>
   </nav>
 </header>`;
 
@@ -305,10 +306,19 @@ translatePage(savedLanguage);
 // ===== Mobile nav toggle =====
 const navToggle = document.querySelector(".nav-toggle");
 const navLinks = document.querySelector(".nav-links");
+const navClose = document.querySelector(".nav-close");
 
 if (navToggle && navLinks) {
   navToggle.addEventListener("click", () => {
-    navLinks.classList.toggle("open");
+    const isOpen = navLinks.classList.toggle("open");
+    document.body.classList.toggle("nav-open", isOpen);
+  });
+}
+
+if (navClose && navLinks) {
+  navClose.addEventListener("click", () => {
+    navLinks.classList.remove("open");
+    document.body.classList.remove("nav-open");
   });
 }
 
