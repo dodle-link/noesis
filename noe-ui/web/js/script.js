@@ -561,6 +561,22 @@ function enhanceSelect(nativeSelect) {
 
 document.querySelectorAll("select").forEach(enhanceSelect);
 
+// ===== Reserve This Room → sync booking widget's room type =====
+document.querySelectorAll(".reserve-room").forEach((link) => {
+  link.addEventListener("click", () => {
+    const roomType = link.dataset.roomType;
+    const roomTypeSelect = document.getElementById("room-type");
+    if (!roomType || !roomTypeSelect) return;
+
+    const matchingOption = Array.from(roomTypeSelect.options).find((option) => option.textContent.trim() === roomType);
+    if (!matchingOption) return;
+
+    roomTypeSelect.value = matchingOption.value;
+    roomTypeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    customSelectRefreshers.forEach((refresh) => refresh());
+  });
+});
+
 // ===== Homepage banner spotlight =====
 (function bannerSpotlight() {
   const hero = document.querySelector(".home-page .hero");
