@@ -690,6 +690,171 @@ body.dark-mode .theme-toggle-moon {
   height: fit-content;
 }
 
+.field-daterange {
+  position: relative;
+}
+
+.date-range-input {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.date-range-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  overflow-y: auto;
+  padding: 32px;
+  background: var(--color-bg);
+  color: var(--color-dark);
+}
+
+.date-range-picker[hidden] {
+  display: none;
+}
+
+.date-picker-header {
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: center;
+  margin-bottom: 12px;
+  width: min(680px, 100%);
+}
+
+.date-picker-instruction {
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-align: center;
+}
+
+.date-picker-nav {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-dark);
+  cursor: pointer;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.date-picker-nav:hover,
+.date-picker-nav:focus-visible {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: #fff;
+  outline: none;
+}
+
+.date-picker-months {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  width: min(680px, 100%);
+}
+
+.date-picker-month + .date-picker-month {
+  border-left: 1px solid var(--color-border);
+  padding-left: 18px;
+}
+
+.date-picker-month h3 {
+  margin-bottom: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.date-picker-weekdays,
+.date-picker-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.date-picker-weekdays {
+  margin-bottom: 4px;
+  color: var(--color-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.date-picker-day {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.date-picker-day:hover,
+.date-picker-day:focus-visible {
+  background: var(--color-accent-banner);
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.date-picker-day.is-today {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.date-picker-day.is-in-range {
+  background: var(--color-accent-banner);
+}
+
+.date-picker-day.is-range-start,
+.date-picker-day.is-range-end {
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.date-picker-day.is-disabled {
+  color: var(--color-border);
+  cursor: not-allowed;
+}
+
+.date-picker-day.is-disabled:hover,
+.date-picker-day.is-disabled:focus-visible {
+  background: transparent;
+  outline: none;
+}
+
+@media (max-width: 700px) {
+  .date-range-picker {
+    align-content: start;
+    padding: 24px 16px;
+  }
+
+  .date-picker-months {
+    grid-template-columns: 1fr;
+    max-width: 360px;
+  }
+
+  .date-picker-month + .date-picker-month {
+    display: none;
+  }
+}
+
 .form-message {
   margin-top: 16px;
   font-size: 0.9rem;
@@ -1518,21 +1683,24 @@ body.dark-mode .cta {
   color: var(--color-dark);
 }
 
-body.dark-mode .flatpickr-calendar {
+body.dark-mode .date-range-picker {
   background: var(--color-surface);
   color: var(--color-dark);
   box-shadow: 0 12px 30px rgba(0,0,0,0.3);
 }
 
-body.dark-mode .flatpickr-day {
-  color: var(--color-dark);
+body.dark-mode .date-picker-day.is-in-range,
+body.dark-mode .date-picker-day:hover,
+body.dark-mode .date-picker-day:focus-visible {
+  background: #464139;
 }
 
-body.dark-mode .flatpickr-months .flatpickr-month,
-body.dark-mode .flatpickr-weekdays,
-body.dark-mode span.flatpickr-weekday {
-  background: var(--color-surface);
-  color: var(--color-dark);
+body.dark-mode .date-picker-day.is-range-start,
+body.dark-mode .date-picker-day.is-range-end,
+body.dark-mode .date-picker-nav:hover,
+body.dark-mode .date-picker-nav:focus-visible {
+  background: var(--color-accent);
+  color: #fff;
 }
 
 

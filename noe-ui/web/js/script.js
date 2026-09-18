@@ -325,25 +325,197 @@ if (navClose && navLinks) {
   });
 }
 
-// ===== Flatpickr date-range pickers for check-in / check-out =====
+// ===== Dependency-free date-range pickers for check-in / check-out =====
 document.querySelectorAll(".date-range-input").forEach((input) => {
   const field = input.closest(".field-daterange");
   const checkIn = field.querySelector('input[name="check-in"]');
   const checkOut = field.querySelector('input[name="check-out"]');
+  const form = input.closest("form");
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const today = atMidnight(new Date());
+  let checkInDate = null;
+  let checkOutDate = null;
+  let visibleMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  let focusedDate = null;
 
-  flatpickr(input, {
-    mode: "range",
-    dateFormat: "Y-m-d",
-    altInput: true,
-    altFormat: "M j, Y",
-    minDate: "today",
-    onOpen: () => document.body.classList.add("datepicker-open"),
-    onClose: () => document.body.classList.remove("datepicker-open"),
-    onChange: (selectedDates) => {
-      checkIn.value = selectedDates[0] ? flatpickr.formatDate(selectedDates[0], "Y-m-d") : "";
-      checkOut.value = selectedDates[1] ? flatpickr.formatDate(selectedDates[1], "Y-m-d") : "";
-    },
+  input.readOnly = true;
+  input.setAttribute("aria-haspopup", "dialog");
+  input.setAttribute("aria-expanded", "false");
+
+  const calendar = document.createElement("div");
+  calendar.className = "date-range-picker";
+  calendar.setAttribute("role", "dialog");
+  calendar.setAttribute("aria-label", "Choose check-in and check-out dates");
+  calendar.hidden = true;
+  document.body.appendChild(calendar);
+
+  function atMidnight(date) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  }
+
+  function toISODate(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }
+
+  function isSameDay(firstDate, secondDate) {
+    return firstDate && secondDate && firstDate.getTime() === secondDate.getTime();
+  }
+
+  function isInRange(date) {
+    return checkInDate && checkOutDate && date > checkInDate && date < checkOutDate;
+  }
+
+  function formatDate(date) {
+    return new Intl.DateTimeFormat(document.documentElement.lang || "en", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(date);
+  }
+
+  function formatDateRange(startDate, endDate) {
+    const formatter = new Intl.DateTimeFormat(document.documentElement.lang || "en", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    if (typeof formatter.formatRange === "function") return formatter.formatRange(startDate, endDate);
+    return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+  }
+
+  function updateInputs() {
+    checkIn.value = checkInDate ? toISODate(checkInDate) : "";
+    checkOut.value = checkOutDate ? toISODate(checkOutDate) : "";
+    input.value = checkInDate ? (checkOutDate ? formatDateRange(checkInDate, checkOutDate) : formatDate(checkInDate)) : "";
+  }
+
+  function focusDate(date) {
+    focusedDate = atMidnight(date < today ? today : date);
+    if (focusedDate.getFullYear() !== visibleMonth.getFullYear() || focusedDate.getMonth() < visibleMonth.getMonth() || focusedDate.getMonth() > visibleMonth.getMonth() + 1) {
+      visibleMonth = new Date(focusedDate.getFullYear(), focusedDate.getMonth(), 1);
+      render();
+    }
+    requestAnimationFrame(() => calendar.querySelector(`[data-date="${toISODate(focusedDate)}"]`)?.focus());
+  }
+
+  function selectDate(date) {
+    if (date < today) return;
+    if (!checkInDate || checkOutDate || date <= checkInDate) {
+      checkInDate = date;
+      checkOutDate = null;
+    } else {
+      checkOutDate = date;
+    }
+    focusedDate = date;
+    updateInputs();
+    render();
+    if (checkOutDate) closeCalendar();
+  }
+
+  function monthMarkup(offset) {
+    const month = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + offset, 1);
+    const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+    const days = [];
+    for (let blankDay = 0; blankDay < month.getDay(); blankDay += 1) days.push('<span class="date-picker-day date-picker-day--empty" aria-hidden="true"></span>');
+    for (let dayNumber = 1; dayNumber <= daysInMonth; dayNumber += 1) {
+      const date = new Date(month.getFullYear(), month.getMonth(), dayNumber);
+      const disabled = date < today;
+      const selected = isSameDay(date, checkInDate) || isSameDay(date, checkOutDate);
+      const classes = ["date-picker-day"];
+      if (disabled) classes.push("is-disabled");
+      if (isSameDay(date, today)) classes.push("is-today");
+      if (isSameDay(date, checkInDate)) classes.push("is-range-start");
+      if (isSameDay(date, checkOutDate)) classes.push("is-range-end");
+      if (isInRange(date)) classes.push("is-in-range");
+      days.push(`<button class="${classes.join(" ")}" type="button" data-date="${toISODate(date)}" aria-label="${formatDate(date)}" aria-pressed="${selected}" ${disabled ? "disabled" : ""}>${dayNumber}</button>`);
+    }
+    return `<section class="date-picker-month" aria-label="${monthNames[month.getMonth()]} ${month.getFullYear()}"><h3>${monthNames[month.getMonth()]} ${month.getFullYear()}</h3><div class="date-picker-weekdays">${weekdayNames.map((day) => `<span>${day}</span>`).join("")}</div><div class="date-picker-days">${days.join("")}</div></section>`;
+  }
+
+  function render() {
+    calendar.innerHTML = `<div class="date-picker-header"><button class="date-picker-nav" type="button" data-calendar-action="previous" aria-label="Previous month">&lsaquo;</button><p class="date-picker-instruction">${checkInDate && !checkOutDate ? "Choose a check-out date" : "Choose your stay dates"}</p><button class="date-picker-nav" type="button" data-calendar-action="next" aria-label="Next month">&rsaquo;</button></div><div class="date-picker-months">${monthMarkup(0)}${monthMarkup(1)}</div>`;
+  }
+
+  function openCalendar() {
+    if (!calendar.hidden) return;
+    const activeDate = checkOutDate || checkInDate || today;
+    visibleMonth = new Date(activeDate.getFullYear(), activeDate.getMonth(), 1);
+    focusedDate = activeDate;
+    calendar.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+    document.body.classList.add("datepicker-open");
+    render();
+    requestAnimationFrame(() => calendar.querySelector(`[data-date="${toISODate(activeDate)}"]:not(:disabled)`)?.focus());
+  }
+
+  function closeCalendar() {
+    if (calendar.hidden) return;
+    calendar.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    document.body.classList.remove("datepicker-open");
+    input.focus();
+  }
+
+  input.addEventListener("click", openCalendar);
+  input.addEventListener("keydown", (event) => {
+    if (["ArrowDown", "Enter", " "].includes(event.key)) {
+      event.preventDefault();
+      openCalendar();
+    }
   });
+
+  calendar.addEventListener("click", (event) => {
+    const navigation = event.target.closest("[data-calendar-action]");
+    if (navigation) {
+      visibleMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + (navigation.dataset.calendarAction === "next" ? 1 : -1), 1);
+      render();
+      return;
+    }
+    const day = event.target.closest("[data-date]");
+    if (day) selectDate(new Date(`${day.dataset.date}T00:00:00`));
+  });
+
+  calendar.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeCalendar();
+      return;
+    }
+    const day = event.target.closest("[data-date]");
+    if (!day) return;
+    const date = new Date(`${day.dataset.date}T00:00:00`);
+    const movements = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+    if (Object.hasOwn(movements, event.key)) {
+      event.preventDefault();
+      focusDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() + movements[event.key]));
+    } else if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      focusDate(new Date(date.getFullYear(), date.getMonth(), date.getDate() + (event.key === "Home" ? -date.getDay() : 6 - date.getDay())));
+    } else if (event.key === "PageUp" || event.key === "PageDown") {
+      event.preventDefault();
+      focusDate(new Date(date.getFullYear(), date.getMonth() + (event.key === "PageUp" ? -1 : 1), date.getDate()));
+    } else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      selectDate(date);
+    }
+  });
+
+  document.addEventListener("mousedown", (event) => {
+    if (!calendar.hidden && !field.contains(event.target) && !calendar.contains(event.target)) closeCalendar();
+  });
+
+  form?.addEventListener("reset", () => {
+    checkInDate = null;
+    checkOutDate = null;
+    focusedDate = null;
+    requestAnimationFrame(() => {
+      updateInputs();
+      render();
+    });
+  });
+
+  render();
 });
 
 // ===== Booking form(s) =====
