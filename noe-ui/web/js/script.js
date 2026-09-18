@@ -587,29 +587,32 @@ document.querySelectorAll(".reserve-room").forEach((link) => {
   });
 });
 
-// ===== Homepage banner spotlight =====
+// ===== Banner spotlight (home hero + page banners) =====
 (function bannerSpotlight() {
-  const hero = document.querySelector(".home-page .hero");
-  if (!hero || window.matchMedia("(hover: none), (pointer: coarse)").matches) return;
-  let fluidExitTimeout;
+  const heroes = document.querySelectorAll(".home-page .hero, .page-hero");
+  if (!heroes.length || window.matchMedia("(hover: none), (pointer: coarse)").matches) return;
 
-  hero.addEventListener("mouseenter", () => {
-    clearTimeout(fluidExitTimeout);
-    hero.classList.add("is-spotlighted");
-  });
+  heroes.forEach((hero) => {
+    let fluidExitTimeout;
 
-  hero.addEventListener("mousemove", (event) => {
-    const bounds = hero.getBoundingClientRect();
-    hero.style.setProperty("--spotlight-x", `${event.clientX - bounds.left}px`);
-    hero.style.setProperty("--spotlight-y", `${event.clientY - bounds.top}px`);
-  });
+    hero.addEventListener("mouseenter", () => {
+      clearTimeout(fluidExitTimeout);
+      hero.classList.add("is-spotlighted");
+    });
 
-  hero.addEventListener("mouseleave", () => {
-    hero.style.removeProperty("--spotlight-x");
-    hero.style.removeProperty("--spotlight-y");
-    fluidExitTimeout = setTimeout(() => {
-      hero.classList.remove("is-spotlighted");
-    }, 2000);
+    hero.addEventListener("mousemove", (event) => {
+      const bounds = hero.getBoundingClientRect();
+      hero.style.setProperty("--spotlight-x", `${event.clientX - bounds.left}px`);
+      hero.style.setProperty("--spotlight-y", `${event.clientY - bounds.top}px`);
+    });
+
+    hero.addEventListener("mouseleave", () => {
+      hero.style.removeProperty("--spotlight-x");
+      hero.style.removeProperty("--spotlight-y");
+      fluidExitTimeout = setTimeout(() => {
+        hero.classList.remove("is-spotlighted");
+      }, 2000);
+    });
   });
 })();
 
