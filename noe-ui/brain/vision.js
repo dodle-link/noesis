@@ -221,7 +221,7 @@ function toggleCrtEffect(enabled) {
       if (element) element.style.display = '';
     });
     
-    // Note: Audio will be handled by audio-player.js via the toggle's change event
+    // Note: Audio will be handled by sound.js via the toggle's change event
     
   } else {
     // Disable CRT effect
@@ -233,6 +233,6 @@ function toggleCrtEffect(enabled) {
       if (element) element.style.display = 'none';
     });
     
-    // Note: Audio will be handled by audio-player.js via the toggle's change event
+    // Note: Audio will be handled by sound.js via the toggle's change event
   }
 }

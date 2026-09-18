@@ -33,10 +33,10 @@ git clone https://github.com/dodle-link/noesis.git
 noe-ui/
 ├── index.html                  # Main entry point
 ├── brain/                      # JavaScript logic
-│   ├── simple-conscious.js     # Consciousness simulation
-│   ├── energy-system.js        # Energy state management
-│   ├── audio-player.js         # Audio playback
-│   ├── crt-effect.js           # CRT visual effect
+│   ├── imagine.js              # Imagination module
+│   ├── energy.js               # Energy state management
+│   ├── sound.js                # Audio playback
+│   ├── vision.js               # CRT visual effect
 │   └── limbric.js              # Limbic system behaviour
 ├── css/                        # Stylesheets
 │   ├── base.css

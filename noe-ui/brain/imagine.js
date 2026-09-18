@@ -1,5 +1,5 @@
-// Simple Energy Cubes Generator
-// Creates energy sources for the conscious pixel to interact with
+// Imagination module
+// Creates energy sources for the pixel to imagine and interact with
 
 document.addEventListener('DOMContentLoaded', function() {
   // Wait a moment for limbric.js to initialize

@@ -150,7 +150,7 @@ function updatePixel(pixel, state, timestamp) {
   // Process mouse interactions
   processMouseInteractions(state, deltaTime);
   
-  // Check for energy from energy-system.js
+  // Check for energy from energy.js
   if (window.noeEnergy) {
     // Sync energy level with the global energy system
     state.energy = window.noeEnergy.currentLevel;
@@ -841,13 +841,13 @@ function playWindowContactSound() {
     return;
   }
   
-  // Check if we have access to the playClickSound function from audio-player.js
+  // Check if we have access to the playClickSound function from sound.js
   if (typeof window.playClickSound === 'function') {
     window.playClickSound();
     return;
   }
   
-  // Fallback implementation if audio-player.js hasn't exposed the function
+  // Fallback implementation if sound.js hasn't exposed the function
   const clickSound = 'sounds/click.mp3';
   const soundInstance = new Audio(clickSound);
   soundInstance.volume = 0.3;
@@ -1150,7 +1150,7 @@ function processMouseInteractions(state, deltaTime) {
     
     // Being excited consumes more energy
     if (window.noeEnergy) {
-      // Extra energy consumption due to excitement is handled in energy-system.js
+      // Extra energy consumption due to excitement is handled in energy.js
     }
   } else {
     // Return to normal pulse speed when calm, no longer affected by energy
