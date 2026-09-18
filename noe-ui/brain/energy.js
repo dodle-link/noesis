@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let energy = 100;
   const energyDecayRate = 0.01; // Changed from 0.05 to 0.01 for ~1% energy decay per second
   const energyRechargeRate = 0.5;
-  const contactDistance = 100; // Distance threshold for energy transfer
+  const contactDistance = 40; // Distance threshold for energy transfer
   
   // Cube movement settings
   const cubeMovementSpeed = 0.1;    // Base movement speed (reduced for slower movement)

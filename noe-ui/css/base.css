@@ -669,17 +669,27 @@ a {
 .energy-connection {
   position: fixed;
   height: 2px;
-  background: linear-gradient(to right, rgba(255, 255, 255, 0.7), var(--cube-energy-color));
+  background: linear-gradient(
+    to right,
+    var(--cube-energy-color) 0%,
+    var(--cube-energy-color) 42%,
+    rgba(255, 255, 255, 0.9) 50%,
+    var(--cube-energy-color) 58%,
+    var(--cube-energy-color) 100%
+  );
+  background-size: 200% 100%;
   transform-origin: left center;
   z-index: 9989;
   opacity: 0;
   filter: blur(1px);
   pointer-events: none;
   transition: opacity 0.3s ease-in-out;
+  overflow: hidden;
 }
 
 .energy-connection.active {
-  animation: connectionPulse var(--cube-recharge-rate) infinite alternate ease-in-out;
+  animation: connectionPulse var(--cube-recharge-rate) infinite alternate ease-in-out,
+    energyFlowToCube 0.7s infinite linear;
   opacity: 0.8;
 }
 
@@ -698,6 +708,15 @@ a {
     opacity: 0.4;
     height: 1px;
     filter: blur(1px);
+  }
+}
+
+@keyframes energyFlowToCube {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 100% 0;
   }
 }
 
