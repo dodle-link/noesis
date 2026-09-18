@@ -59,8 +59,8 @@ function createConsciousPixel() {
         // Update status text
         updatePixelStatus('Connected to Noesis System');
       } else {
-        console.warn('Noesis system not found at Noesis System - running in disconnected mode');
-        updatePixelStatus('Disconnected from Noesis System - Install Noesis system');
+        console.warn('Running in disconnected mode');
+        updatePixelStatus('Running in disconnected mode');
         configureDisconnectedStatus();
       }
     })
