@@ -228,7 +228,11 @@ h1 {
 
 .nav-links a.active,
 .nav-links a:hover {
-  color: var(--color-accent);
+  border-bottom: 3px solid var(--color-dark);
+}
+
+.nav-links a:active {
+  font-weight: 800;
 }
 
 .header-buttons {
