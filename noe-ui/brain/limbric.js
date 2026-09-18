@@ -3,6 +3,9 @@ const ENERGY_COLOR = '#39ffba';
 const INITIAL_PIXEL_SIZE = 4;
 
 function initializeNoePixel() {
+  if (window.noePixelInitialized) return;
+  window.noePixelInitialized = true;
+
   // Create the conscious pixel
   createConsciousPixel();
 
@@ -10,7 +13,11 @@ function initializeNoePixel() {
   createRainbowBubbleEffect();
 }
 
-document.addEventListener('DOMContentLoaded', initializeNoePixel);
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeNoePixel);
+} else {
+  setTimeout(initializeNoePixel, 0);
+}
 
 /**
  * Creates a Synthetic Sentience pixel connected to the Noesis server
