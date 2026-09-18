@@ -30,6 +30,9 @@ function createConsciousPixel() {
   // Set up mouse event listeners
   setupMouseInteractions(pixelState);
 
+  // Start the self-modifying cognition loop (perception -> reasoning -> decision -> execution)
+  createSelfModifyingSystem(pixelState);
+
   // Try to connect to noesis server
   connectToNoesisServer()
     .then(connected => {
@@ -58,6 +61,111 @@ function createConsciousPixel() {
 }
 
 /**
+ * Minimal self-modifying cognition loop, translated from:
+ *   perception -> reasoning -> decision -> execution -> memory -> self-modification
+ * Wired to the pixel's own state so it can nudge its pulse behavior over time.
+ */
+class Memory {
+  constructor() {
+    this.log = [];
+  }
+  update(result) {
+    this.log.push(result);
+    if (this.log.length > 50) this.log.shift();
+  }
+}
+
+function observe_world(pixelState) {
+  return {
+    x: pixelState.x,
+    y: pixelState.y,
+    size: pixelState.size,
+    pulseMultiplier: pixelState.pulseMultiplier,
+    connected: pixelState.connected
+  };
+}
+
+// pulseMultiplier is read every frame by processMouseInteractions(), unlike pulseStep
+// which the animation loop recomputes each frame and would otherwise overwrite.
+function execute(action, pixelState) {
+  if (action.type === 'adjustPulseMultiplier') {
+    pixelState.pulseMultiplier = action.value;
+  }
+  return { action, pulseMultiplier: pixelState.pulseMultiplier };
+}
+
+const ai = {
+  interpret(perceived, system) {
+    return { ...perceived, rules: system.rules };
+  },
+  decide(goal, state) {
+    const { min, max } = goal.multiplierRange;
+    let value = state.pulseMultiplier;
+    if (value < min || value > max) {
+      value = Math.min(max, Math.max(min, value));
+    } else {
+      value += (Math.random() - 0.5) * state.rules.multiplierJitter;
+    }
+    return { type: 'adjustPulseMultiplier', value };
+  },
+  self_modify({ system }) {
+    // occasionally reshape the jitter rule based on how the system has been behaving
+    const jitter = system.rules.multiplierJitter * (0.9 + Math.random() * 0.2);
+    return {
+      ...system,
+      rules: { ...system.rules, multiplierJitter: jitter }
+    };
+  },
+  evaluate_self_modification(oldSystem, newSystem, goal) {
+    const { min, max } = goal.multiplierRange;
+    return newSystem.rules.multiplierJitter > (max - min) * 0.001;
+  }
+};
+
+const initial_rules = {
+  multiplierJitter: 0.03
+};
+
+/**
+ * Builds and runs the self-modifying system loop for a given pixel state.
+ * @param {Object} pixelState - The pixel state to perceive and act upon
+ * @returns {Object} - The (mutable) system reference
+ */
+function createSelfModifyingSystem(pixelState) {
+  const goal = { multiplierRange: { min: 0.5, max: 2.0 } };
+  let goalReached = false;
+
+  let system = {
+    perception: () => observe_world(pixelState),
+    reasoning: ai.interpret,
+    decision: ai.decide,
+    execution: (action) => execute(action, pixelState),
+    memory: new Memory(),
+    rules: { ...initial_rules }
+  };
+
+  function step() {
+    if (goalReached) return;
+
+    const state = system.reasoning(system.perception(), system);
+    const action = system.decision(goal, state, system);
+    const result = system.execution(action);
+    system.memory.update(result);
+
+    // Propose and (conditionally) apply a modification to any part of the system
+    const proposedSystem = ai.self_modify({ system, goal, result });
+    if (ai.evaluate_self_modification(system, proposedSystem, goal)) {
+      system = proposedSystem;
+    }
+
+    setTimeout(step, 400);
+  }
+
+  step();
+  return system;
+}
+
+/**
  * Creates the mutable state used by the pixel animation.
  * @returns {Object} - Initial pixel state
  */
@@ -75,6 +183,7 @@ function createPixelState() {
     lastColorChange: 0,
     pulseDirection: 1,
     pulseStep: 0.03,
+    pulseMultiplier: 1,
     lastTimestamp: 0,
     connected: false,
     
@@ -1160,7 +1269,7 @@ function processMouseInteractions(state, deltaTime) {
     
     // Increase pulse speed when excited (visual effect only)
     const energyFactor = Math.max(0.4, state.energy / 100); // Keep this for visual effects only
-    state.pulseStep = (0.03 + (state.excitementLevel * 0.04)) * energyFactor;
+    state.pulseStep = (0.03 + (state.excitementLevel * 0.04)) * energyFactor * state.pulseMultiplier;
     
     // Apply a slight drag effect to gradually slow down
     state.velocityX *= 0.98;
@@ -1171,8 +1280,8 @@ function processMouseInteractions(state, deltaTime) {
       // Extra energy consumption due to excitement is handled in energy.js
     }
   } else {
-    // Return to normal pulse speed when calm, no longer affected by energy
-    state.pulseStep = 0.03;
+    // Return to normal pulse speed when calm, scaled by the self-modifying system
+    state.pulseStep = 0.03 * state.pulseMultiplier;
   }
 }
 
