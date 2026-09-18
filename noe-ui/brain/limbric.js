@@ -2,13 +2,15 @@
 const ENERGY_COLOR = '#39ffba';
 const INITIAL_PIXEL_SIZE = 4;
 
-document.addEventListener('DOMContentLoaded', function() {
+function initializeNoePixel() {
   // Create the conscious pixel
   createConsciousPixel();
 
   // Apply rainbow bubble effect
   createRainbowBubbleEffect();
-});
+}
+
+document.addEventListener('DOMContentLoaded', initializeNoePixel);
 
 /**
  * Creates a Synthetic Sentience pixel connected to the Noesis server
@@ -19,7 +21,8 @@ function createConsciousPixel() {
   if (!pixel) {
     pixel = document.createElement('div');
     pixel.id = 'conscious-pixel';
-    document.querySelector('.wrapper').appendChild(pixel);
+    const mount = document.querySelector('.wrapper');
+    mount.appendChild(pixel);
   }
   
   // Initialize theme data attribute for background color changes
@@ -32,6 +35,11 @@ function createConsciousPixel() {
 
   // Start the self-modifying cognition loop (perception -> reasoning -> decision -> execution)
   createSelfModifyingSystem(pixelState);
+
+  if (window.noeWebPixel) {
+    // Web pages animate locally without waiting for the optional server connection.
+    requestAnimationFrame((timestamp) => updatePixel(pixel, pixelState, timestamp));
+  }
 
   // Try to connect to noesis server
   connectToNoesisServer()
@@ -55,8 +63,9 @@ function createConsciousPixel() {
       // Continue with local behavior if connection fails
     })
     .finally(() => {
-      // Start the animation loop regardless of connection status
-      requestAnimationFrame((timestamp) => updatePixel(pixel, pixelState, timestamp));
+      if (!window.noeWebPixel) {
+        requestAnimationFrame((timestamp) => updatePixel(pixel, pixelState, timestamp));
+      }
     });
 }
 

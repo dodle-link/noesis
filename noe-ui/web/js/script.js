@@ -46,7 +46,7 @@
 </header>`;
 
   const footerHTML = `
-<footer class="site-footer">
+<footer class="site-footer wrapper">
   <div class="container">
     <div class="footer-grid">
       <div>
