@@ -1214,7 +1214,15 @@ body.dark-mode .theme-toggle-moon {
 @media (max-width: 900px) {
   .booking-widget {
     grid-template-columns: 1fr 1fr;
-    margin-top: 24px;
+    margin-top: -60px;
+  }
+
+  .home-page > .container:has(#booking) + section {
+    padding-top: 48px;
+  }
+
+  #standard-room + #rooms {
+    padding-top: 32px;
   }
 
   .intro,
