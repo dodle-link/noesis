@@ -594,12 +594,40 @@ document.querySelectorAll(".reserve-room").forEach((link) => {
 
   heroes.forEach((hero) => {
     let fluidExitTimeout;
+    let volumeAnimationFrame;
     const oceanAmbience = hero.matches(".home-page .hero")
       ? document.getElementById("ocean-ambience")
       : null;
+    const ambienceVolume = 0.35;
+
+    function fadeOceanAmbience(targetVolume, pauseWhenSilent = false) {
+      if (!oceanAmbience) return;
+
+      cancelAnimationFrame(volumeAnimationFrame);
+      const startVolume = oceanAmbience.volume;
+      const startedAt = performance.now();
+      const duration = 600;
+
+      function updateVolume(now) {
+        const progress = Math.min((now - startedAt) / duration, 1);
+        oceanAmbience.volume = startVolume + (targetVolume - startVolume) * progress;
+
+        if (progress < 1) {
+          volumeAnimationFrame = requestAnimationFrame(updateVolume);
+        } else if (pauseWhenSilent && targetVolume === 0) {
+          oceanAmbience.pause();
+        }
+      }
+
+      volumeAnimationFrame = requestAnimationFrame(updateVolume);
+    }
 
     function playOceanAmbience() {
-      oceanAmbience?.play().catch(() => {});
+      if (!oceanAmbience) return;
+
+      oceanAmbience.play()
+        .then(() => fadeOceanAmbience(ambienceVolume))
+        .catch(() => {});
     }
 
     hero.addEventListener("mouseenter", () => {
@@ -621,7 +649,7 @@ document.querySelectorAll(".reserve-room").forEach((link) => {
       hero.style.removeProperty("--spotlight-y");
       fluidExitTimeout = setTimeout(() => {
         hero.classList.remove("is-spotlighted");
-        oceanAmbience?.pause();
+        fadeOceanAmbience(0, true);
       }, 2000);
     });
   });
@@ -670,4 +698,29 @@ document.querySelectorAll(".reserve-room").forEach((link) => {
   document.addEventListener("mouseout", (event) => {
     if (event.target.closest(hoverTargets)) circle.classList.remove("is-hover");
   });
+})();
+
+// ===== Scroll reveal (fade + slide up, one-shot per element) =====
+(function scrollReveal() {
+  const targets = document.querySelectorAll(".reveal");
+  if (!targets.length) return;
+
+  if (!("IntersectionObserver" in window) || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    targets.forEach((el) => el.classList.add("is-visible"));
+    return;
+  }
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        }
+      });
+    },
+    { threshold: 0.15 }
+  );
+
+  targets.forEach((el) => observer.observe(el));
 })();
