@@ -6,7 +6,7 @@
 Noesis is a collection of experimental components rather than a single packaged
 application. The repository combines a Python-based simulation engine, a
 platform gateway, the Noesis Object Encoding (`.noe`) language, and a browser
-interface for the **Noe** synthetic-sentience pixel.
+interface for the **Noe** synthetic-sentience.
 
 The project is exploratory and should not be interpreted as a claim that the
 software is conscious or sentient.
