@@ -269,4 +269,9 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Initialize the audio player
   initAudioPlayer();
+
+  // Expose the sound effect used by the limbic interaction module.
+  window.noeSound = Object.freeze({
+    playClickSound
+  });
 });

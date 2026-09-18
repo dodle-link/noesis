@@ -128,6 +128,11 @@ document.addEventListener('DOMContentLoaded', function() {
           
           // Visual feedback
           pixel.classList.add('energizing');
+          const now = performance.now();
+          if (window.noeImagine && now - (cube.lastBurstTime || 0) > 500) {
+            window.noeImagine.createEnergyBurst(cube.position.x, cube.position.y);
+            cube.lastBurstTime = now;
+          }
           
           // Update cube appearance based on energy level
           updateCubeEnergy(cube);

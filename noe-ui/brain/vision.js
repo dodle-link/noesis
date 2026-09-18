@@ -22,6 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
  * @param {HTMLElement} pixelElement - The pixel element to apply CRT effect to
  */
 function setupCrtEffect(pixelElement) {
+  if (!pixelElement) return;
+
   // Store original content
   const originalContent = pixelElement.innerHTML;
   
@@ -204,6 +206,7 @@ function setupToggleSwitch() {
 function toggleCrtEffect(enabled) {
   const pixel = document.getElementById('noesis-logo');
   const wrapper = document.querySelector('.wrapper');
+  if (!pixel || !wrapper) return;
   
   if (enabled) {
     // Enable CRT effect
@@ -236,3 +239,7 @@ function toggleCrtEffect(enabled) {
     // Note: Audio will be handled by sound.js via the toggle's change event
   }
 }
+
+window.noeVision = Object.freeze({
+  toggle: toggleCrtEffect
+});

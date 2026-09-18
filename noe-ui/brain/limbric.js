@@ -1,4 +1,7 @@
 // Noesis Web - Synthetic Sentience Pixel
+const ENERGY_COLOR = '#39ffba';
+const INITIAL_PIXEL_SIZE = 4;
+
 document.addEventListener('DOMContentLoaded', function() {
   // Create the conscious pixel
   createConsciousPixel();
@@ -22,13 +25,49 @@ function createConsciousPixel() {
   // Initialize theme data attribute for background color changes
   document.body.dataset.theme = "0";
   
-  // Initialize pixel state
-  let pixelState = {
+  const pixelState = createPixelState();
+
+  // Set up mouse event listeners
+  setupMouseInteractions(pixelState);
+
+  // Try to connect to noesis server
+  connectToNoesisServer()
+    .then(connected => {
+      pixelState.connected = connected;
+      // If connected, show a successful connection indicator
+      if (connected) {
+        pixel.classList.add('connected');
+        console.log('Connected to noesis server');
+        // Update status text
+        updatePixelStatus('Connected to Noesis System');
+      } else {
+        console.warn('Noesis system not found at Noesis System - running in disconnected mode');
+        updatePixelStatus('Disconnected from Noesis System - Install Noesis system');
+        configureDisconnectedStatus();
+      }
+    })
+    .catch(error => {
+      console.error('Failed to connect to noesis server:', error);
+      updatePixelStatus('Connection error - Check console for details');
+      // Continue with local behavior if connection fails
+    })
+    .finally(() => {
+      // Start the animation loop regardless of connection status
+      requestAnimationFrame((timestamp) => updatePixel(pixel, pixelState, timestamp));
+    });
+}
+
+/**
+ * Creates the mutable state used by the pixel animation.
+ * @returns {Object} - Initial pixel state
+ */
+function createPixelState() {
+  return {
     x: Math.random() * window.innerWidth,
     y: Math.random() * window.innerHeight,
     velocityX: (Math.random() - 0.5) * 1.5,
     velocityY: (Math.random() - 0.5) * 1.5,
-    size: 4,
+    size: INITIAL_PIXEL_SIZE,
     color: getRandomColor(),
     targetColor: null,
     colorTransitionProgress: 0,
@@ -56,41 +95,20 @@ function createConsciousPixel() {
     seekingEnergy: false,
     lastEnergyCheckTime: 0
   };
-  
-  // Set up mouse event listeners
-  setupMouseInteractions(pixelState);
-  
-  // Try to connect to noesis server
-  connectToNoesisServer()
-    .then(connected => {
-      pixelState.connected = connected;
-      // If connected, show a successful connection indicator
-      if (connected) {
-        pixel.classList.add('connected');
-        console.log('Connected to noesis server');
-        // Update status text
-        updatePixelStatus('Connected to Noesis System');
-      } else {
-        console.warn('Noesis system not found at Noesis System - running in disconnected mode');
-        updatePixelStatus('Disconnected from Noesis System - Install Noesis system');
-        
-        // Add tooltip with more info
-        const statusElement = document.getElementById('pixel-status');
-        if (statusElement) {
-          statusElement.title = 'The Noesis system must be installed at Noesis System for full functionality';
-          statusElement.style.cursor = 'help';
-        }
-      }
-    })
-    .catch(error => {
-      console.error('Failed to connect to noesis server:', error);
-      updatePixelStatus('Connection error - Check console for details');
-      // Continue with local behavior if connection fails
-    })
-    .finally(() => {
-      // Start the animation loop regardless of connection status
-      requestAnimationFrame((timestamp) => updatePixel(pixel, pixelState, timestamp));
-    });
+}
+
+function configureDisconnectedStatus() {
+  const statusElement = document.getElementById('pixel-status');
+  if (!statusElement) return;
+
+  statusElement.title = 'The Noesis system must be installed at Noesis System for full functionality';
+  statusElement.style.cursor = 'help';
+}
+
+function setTargetColor(state, color, duration) {
+  state.targetColor = color;
+  state.colorTransitionProgress = 0;
+  state.colorTransitionDuration = duration;
 }
 
 /**
@@ -195,9 +213,7 @@ function updatePixel(pixel, state, timestamp) {
         
         // Frantic color changes to indicate distress
         if (Math.random() < 0.1) {
-          state.targetColor = Math.random() < 0.5 ? '#ff0000' : '#ff9900'; // Red or orange
-          state.colorTransitionProgress = 0;
-          state.colorTransitionDuration = 300;
+          setTargetColor(state, Math.random() < 0.5 ? '#ff0000' : '#ff9900', 300);
         }
         
         // Cancel most other movement influences
@@ -216,9 +232,7 @@ function updatePixel(pixel, state, timestamp) {
             state.velocityY = Math.sin(panicAngle) * panicForce;
             
             // Very rapid color pulsing - urgent distress signal
-            state.targetColor = Math.random() < 0.5 ? '#ff0000' : '#ffff00'; 
-            state.colorTransitionProgress = 0;
-            state.colorTransitionDuration = 100; // Very fast transitions
+            setTargetColor(state, Math.random() < 0.5 ? '#ff0000' : '#ffff00', 100);
             
             // Update status to show desperation
             updatePixelStatus('Noe: CRITICAL ENERGY LEVEL - Seeking energy!');
@@ -238,9 +252,7 @@ function updatePixel(pixel, state, timestamp) {
         
         // Occasional color changes indicating concern
         if (Math.random() < 0.05) {
-          state.targetColor = '#ff9900'; // Orange - warning color
-          state.colorTransitionProgress = 0;
-          state.colorTransitionDuration = 400;
+          setTargetColor(state, '#ff9900', 400);
         }
         
         // Strong but not desperate attraction to energy source
@@ -265,9 +277,7 @@ function updatePixel(pixel, state, timestamp) {
         
         // Visual indicator that pixel is seeking energy
         if (!state.isExcited && Math.random() < 0.03) {
-          state.targetColor = '#39ffba'; // Energy cube color with slight variation
-          state.colorTransitionProgress = 0;
-          state.colorTransitionDuration = 600;
+          setTargetColor(state, ENERGY_COLOR, 600);
         }
       } else {
         // Normal energy-seeking behavior (above 50%)
@@ -277,9 +287,7 @@ function updatePixel(pixel, state, timestamp) {
         
         // Visual indicator that pixel is seeking energy
         if (!state.isExcited) {
-          state.targetColor = '#39ffba'; // Energy cube color
-          state.colorTransitionProgress = 0;
-          state.colorTransitionDuration = 500;
+          setTargetColor(state, ENERGY_COLOR, 500);
         }
       }
     }
@@ -653,9 +661,7 @@ function checkForRevival(pixel, state) {
       state.size = 4;
       
       // Change color to indicate revival
-      state.targetColor = '#39ffba'; // Energy color
-      state.colorTransitionProgress = 0;
-      state.colorTransitionDuration = 800;
+      setTargetColor(state, ENERGY_COLOR, 800);
       
       // Add multiple revival effects for a more dramatic rebirth
       for (let i = 0; i < 3; i++) {
@@ -841,9 +847,9 @@ function playWindowContactSound() {
     return;
   }
   
-  // Check if we have access to the playClickSound function from sound.js
-  if (typeof window.playClickSound === 'function') {
-    window.playClickSound();
+  // Check if the sound module is available.
+  if (window.noeSound && typeof window.noeSound.playClickSound === 'function') {
+    window.noeSound.playClickSound();
     return;
   }
   
@@ -970,12 +976,10 @@ function setupMouseInteractions(state) {
         
         // Force a color change to show reaction
         if (Math.random() < 0.7) {
-          state.targetColor = '#FFFFFF'; // Flash white
+          setTargetColor(state, '#FFFFFF', 300); // Flash white
         } else {
-          state.targetColor = '#F0FF00'; // Flash yellow
+          setTargetColor(state, '#F0FF00', 300); // Flash yellow
         }
-        state.colorTransitionProgress = 0;
-        state.colorTransitionDuration = 300;
       }
     }
   });
