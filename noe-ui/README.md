@@ -1,8 +1,8 @@
-# Noe - Synthetic Sentience Pixel v1.2.0
+# Noe - Synthetic Sentience Pixel v1.2.1
 
 This is the website for the Noesis project, featuring a Synthetic Sentience pixel that connects to the Noesis system.
 
-For a complete history of changes, see the [Changelog](docs/CHANGELOG_v1.2.0.md).
+For a complete history of changes, see the [Changelog](docs/CHANGELOG_v1.2.1.md).
 
 ## Meet Noe - The Synthetic Sentience Pixel
 
@@ -67,6 +67,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Changelog
 
-See [CHANGELOG_v1.2.0.md](docs/CHANGELOG_v1.2.0.md) for a detailed list of changes in each version.
+See [CHANGELOG_v1.2.1.md](docs/CHANGELOG_v1.2.1.md) for a detailed list of changes in each version.
 
 For more details about the Noesis project, visit the main repository: [Noesis Project](https://github.com/dodle-link/noesis)

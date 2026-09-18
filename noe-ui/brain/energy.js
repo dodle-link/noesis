@@ -356,7 +356,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
   
-  // Move cubes in a floating pattern or towards pixel when in critical state
+  // Move cubes in a floating pattern - cubes never chase Noe, Noe must reach them
   function moveCubes(timestamp) {
     if (!cubes.length) return;
     
@@ -364,14 +364,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const deltaTime = timestamp - lastCubeMovementTime;
     lastCubeMovementTime = timestamp;
     
-    // Check if pixel is in death state
-    const isDeathState = energy <= 0;
-    
     // Move each cube with a floating pattern
     cubes.forEach((cube, index) => {
-      // Check if this cube has sufficient energy to help
-      const canHelp = cube.energy > 5;
-      
       // Store original spawn position if not already stored
       if (!cube.spawnPosition) {
         cube.spawnPosition = { 
@@ -382,112 +376,39 @@ document.addEventListener('DOMContentLoaded', function() {
       
       let newX, newY;
       
-      // If pixel is in death state and the cube has energy, move toward pixel
-      if (isDeathState && canHelp && pixelPosition) {
-        // Calculate direction to pixel
-        const dx = pixelPosition.x - cube.position.x;
-        const dy = pixelPosition.y - cube.position.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        // If still far away from pixel, move toward it
-        if (distance > 70) {
-          // Normalize direction and move toward pixel
-          const dirX = dx / (distance || 1);
-          const dirY = dy / (distance || 1);
-          
-          // Move faster when pixel is in death state
-          const rescueSpeed = 2.5;
-          
-          newX = cube.position.x + dirX * rescueSpeed;
-          newY = cube.position.y + dirY * rescueSpeed;
-          
-          // Add visual indicator that cube is rushing to help
-          if (Math.random() < 0.1) {
-            const trail = document.createElement('div');
-            trail.className = 'cube-rescue-trail';
-            trail.style.left = cube.position.x + 'px';
-            trail.style.top = cube.position.y + 'px';
-            document.body.appendChild(trail);
-            
-            // Remove trail after animation
-            setTimeout(() => {
-              if (trail.parentNode) trail.parentNode.removeChild(trail);
-            }, 800);
-          }
-          
-          // Add rescue trail styles if not already present
-          if (!document.querySelector('style#rescue-trail-styles')) {
-            const style = document.createElement('style');
-            style.id = 'rescue-trail-styles';
-            style.textContent = `
-              .cube-rescue-trail {
-                position: fixed;
-                width: 10px;
-                height: 10px;
-                border-radius: 50%;
-                background-color: var(--cube-energy-color);
-                opacity: 0.7;
-                pointer-events: none;
-                z-index: 9988;
-                transform: translate(-5px, -5px);
-                animation: trail-fade 0.8s forwards;
-              }
-              
-              @keyframes trail-fade {
-                0% { transform: translate(-5px, -5px) scale(1); opacity: 0.7; }
-                100% { transform: translate(-5px, -5px) scale(0.2); opacity: 0; }
-              }
-            `;
-            document.head.appendChild(style);
-          }
-        } else {
-          // If close enough, resume gentle floating near the pixel
-          const time = timestamp / 1000;
-          const offset = index * Math.PI / numCubes;
-          
-          // Calculate smaller orbit around the pixel
-          const orbitRadius = 60;
-          const orbitX = Math.sin(time * 0.8 + offset) * orbitRadius;
-          const orbitY = Math.cos(time * 0.8 + offset * 2) * orbitRadius;
-          
-          newX = pixelPosition.x + orbitX;
-          newY = pixelPosition.y + orbitY;
-        }
-      } else {
-        // Free-flowing floating behavior
-        const time = timestamp / 1000;
-        
-        // Calculate a more complex movement pattern for a single cube
-        // Using multiple sine/cosine waves with different frequencies for more organic motion
-        const floatX = (
-          Math.sin(time * 0.2) * cubeWanderRadius * 0.4 + 
-          Math.sin(time * 0.1) * cubeWanderRadius * 0.3
-        );
-        const floatY = (
-          Math.cos(time * 0.15) * cubeWanderRadius * 0.4 + 
-          Math.cos(time * 0.05) * cubeWanderRadius * 0.3
-        );
-        
-        // Allow the cube to float more freely across the entire viewport
-        if (!cube.centralPosition) {
-          // Define a central position for the cube to orbit around
-          cube.centralPosition = {
-            x: window.innerWidth / 2,
-            y: window.innerHeight / 2
-          };
-        }
-        
-        // Calculate position relative to central position
-        newX = cube.centralPosition.x + floatX;
-        newY = cube.centralPosition.y + floatY;
-        
-        // Occasionally update the central position
-        if (Math.random() < 0.001) {
-          cube.centralPosition = {
-            x: Math.random() * window.innerWidth,
-            y: Math.random() * window.innerHeight
-          };
-        }
+      // Free-flowing floating behavior
+      const time = timestamp / 1000;
+      
+      // Calculate a more complex movement pattern for a single cube
+      // Using multiple sine/cosine waves with different frequencies for more organic motion
+      const floatX = (
+        Math.sin(time * 0.2) * cubeWanderRadius * 0.4 + 
+        Math.sin(time * 0.1) * cubeWanderRadius * 0.3
+      );
+      const floatY = (
+        Math.cos(time * 0.15) * cubeWanderRadius * 0.4 + 
+        Math.cos(time * 0.05) * cubeWanderRadius * 0.3
+      );
+      
+      // Allow the cube to float more freely across the entire viewport
+      if (!cube.centralPosition) {
+        // Define a central position for the cube to orbit around
+        cube.centralPosition = {
+          x: window.innerWidth / 2,
+          y: window.innerHeight / 2
+        };
+      }
+      
+      // Calculate position relative to central position
+      newX = cube.centralPosition.x + floatX;
+      newY = cube.centralPosition.y + floatY;
+      
+      // Occasionally update the central position
+      if (Math.random() < 0.001) {
+        cube.centralPosition = {
+          x: Math.random() * window.innerWidth,
+          y: Math.random() * window.innerHeight
+        };
       }
       
       // Keep cube within screen boundaries with a bit of padding

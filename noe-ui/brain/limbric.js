@@ -551,13 +551,26 @@ function handleDeathState(pixel, state, timestamp) {
   // Calculate how long we've been in death state
   const deathDuration = timestamp - (state.deathStateStartTime || timestamp);
   
+  // Determine direction toward the nearest cube, if any, so Noe flounders toward it
+  let flounderDirX = 0;
+  let flounderDirY = 0;
+  if (window.noeEnergy && window.noeEnergy.nearestCube) {
+    const cube = window.noeEnergy.nearestCube;
+    const dx = cube.x - state.x;
+    const dy = cube.y - state.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    flounderDirX = dx / dist;
+    flounderDirY = dy / dist;
+  }
+  
   // Behavior changes the longer we've been in death state
   if (deathDuration < 3000) {
-    // Early death state - occasional twitches of movement
-    if (Math.random() < 0.1) {
-      // Random twitching movement
-      state.velocityX = (Math.random() - 0.5) * 3;
-      state.velocityY = (Math.random() - 0.5) * 3;
+    // Early death state - desperate flounders biased toward the nearest cube
+    if (Math.random() < 0.15) {
+      // Weak, erratic thrash toward the cube (with some randomness) rather than pure noise
+      const jitter = 0.6;
+      state.velocityX = flounderDirX * 2 + (Math.random() - 0.5) * jitter * 3;
+      state.velocityY = flounderDirY * 2 + (Math.random() - 0.5) * jitter * 3;
     } else {
       // Slow down movement
       state.velocityX *= 0.9;
@@ -569,11 +582,12 @@ function handleDeathState(pixel, state, timestamp) {
     state.y += state.velocityY * 0.2;
     
   } else if (deathDuration < 8000) {
-    // Mid death state - weaker movements, more fading
-    if (Math.random() < 0.05) {
-      // Occasional weak twitch
-      state.velocityX = (Math.random() - 0.5) * 1.5;
-      state.velocityY = (Math.random() - 0.5) * 1.5;
+    // Mid death state - weaker flounders, still biased toward the cube, more fading
+    if (Math.random() < 0.08) {
+      // Occasional weak flounder toward the cube
+      const jitter = 0.5;
+      state.velocityX = flounderDirX * 1 + (Math.random() - 0.5) * jitter * 1.5;
+      state.velocityY = flounderDirY * 1 + (Math.random() - 0.5) * jitter * 1.5;
     } else {
       // Slow down movement more
       state.velocityX *= 0.8;
@@ -585,7 +599,7 @@ function handleDeathState(pixel, state, timestamp) {
     state.y += state.velocityY * 0.1;
     
   } else {
-    // Late death state - almost no movement
+    // Late death state - almost no strength left to flounder
     state.velocityX *= 0.95;
     state.velocityY *= 0.95;
     
