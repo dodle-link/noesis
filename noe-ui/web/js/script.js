@@ -594,11 +594,21 @@ document.querySelectorAll(".reserve-room").forEach((link) => {
 
   heroes.forEach((hero) => {
     let fluidExitTimeout;
+    const oceanAmbience = hero.matches(".home-page .hero")
+      ? document.getElementById("ocean-ambience")
+      : null;
+
+    function playOceanAmbience() {
+      oceanAmbience?.play().catch(() => {});
+    }
 
     hero.addEventListener("mouseenter", () => {
       clearTimeout(fluidExitTimeout);
       hero.classList.add("is-spotlighted");
+      playOceanAmbience();
     });
+
+    hero.addEventListener("pointerdown", playOceanAmbience);
 
     hero.addEventListener("mousemove", (event) => {
       const bounds = hero.getBoundingClientRect();
@@ -611,6 +621,7 @@ document.querySelectorAll(".reserve-room").forEach((link) => {
       hero.style.removeProperty("--spotlight-y");
       fluidExitTimeout = setTimeout(() => {
         hero.classList.remove("is-spotlighted");
+        oceanAmbience?.pause();
       }, 2000);
     });
   });
