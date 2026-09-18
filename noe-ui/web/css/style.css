@@ -25,6 +25,10 @@ html {
   scroll-behavior: smooth;
 }
 
+.add-padding-top {
+  padding-top: 86px;
+}
+
 .add-padding-bottom {
   padding-bottom: 130px;
 }
@@ -222,6 +226,10 @@ h1 {
   border-bottom-right-radius: 40px;
   margin-bottom: -40px;
   border-bottom: 0;
+}
+
+.move-up {
+  margin-top: -38px;
 }
 
 .nav {
@@ -498,10 +506,14 @@ body.dark-mode .theme-toggle-moon {
   display: flex;
   align-items: center;
   text-align: center;
+  overflow: hidden;
+  /* bottom curve depth follows the golden ratio (62px / 38px ≈ φ) */
+  border-radius: 0 0 50% 50% / 0 0 62px 62px;
 }
 
 .home-page .hero {
-  background-image: linear-gradient(180deg, rgba(106, 38, 151, 0.885), rgba(58, 15, 105, 0.86)),
+  background-image: linear-gradient(180deg, rgba(68, 22, 104, 0.94), rgba(34, 8, 63, 0.94)),
+    linear-gradient(180deg, rgb(112, 76, 151), rgb(164, 118, 197)),
     url("../img/home-banner.jpg");
   position: relative;
   overflow: hidden;
@@ -574,6 +586,8 @@ body.dark-mode .theme-toggle-moon {
     linear-gradient(180deg, rgb(112, 76, 151), rgb(164, 118, 197));
   position: relative;
   overflow: hidden;
+  /* shorter banner, so the curve depth scales down by the same golden ratio */
+  border-radius: 0 0 50% 50% / 0 0 38px 38px;
 }
 
 .page-hero::after {
@@ -1526,10 +1540,6 @@ body.dark-mode .contact-info-item {
 
 body.dark-mode .site-footer {
   background: #11110f;
-}
-
-.short-banner section.page-hero {
-  padding: 0;
 }
 
 .short-banner .hero p { 
