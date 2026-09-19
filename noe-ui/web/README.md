@@ -17,8 +17,8 @@ This folder contains an experimental website mockup for exploring how the Noesis
 ## Noe Pixel
 
 The web pages use a separate Noe pixel instance from the main `noe-ui/index.html`
-page. The shared behavior is loaded through `js/noe-pixel.js`, which reuses
-`../brain/limbric.js` and mounts the pixel in the shared footer.
+page. The shared behavior is loaded through `js/noe-pixel.js`, which imports
+`../../brain/limbric.js` and mounts the pixel in the shared footer.
 
 The web pages do not load `brain/energy.js`, so this instance keeps the visual
 pixel behavior without energy logic.

@@ -1,0 +1,28 @@
+/* Shared Synthetic Sentience Pixel appearance */
+#conscious-pixel {
+  position: fixed;
+  width: 6px;
+  height: 4px;
+  background-color: rgba(255, 255, 255, 0.8);
+  z-index: 9999;
+  pointer-events: none;
+  transition: opacity 0.2s ease, box-shadow 0.3s ease;
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+  opacity: 0.7;
+  will-change: transform, opacity, box-shadow;
+  transform-origin: center center;
+}
+
+#conscious-pixel.connected {
+  animation: connected-pulse 4s infinite alternate, pixel-rotate 8s linear infinite;
+}
+
+@keyframes pixel-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes connected-pulse {
+  0% { box-shadow: 0 0 6px #57CBF8; }
+  100% { box-shadow: 0 0 10px #e1ff6e; }
+}

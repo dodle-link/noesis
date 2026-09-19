@@ -28,7 +28,7 @@ function createConsciousPixel() {
   if (!pixel) {
     pixel = document.createElement('div');
     pixel.id = 'conscious-pixel';
-    const mount = document.querySelector('.wrapper');
+    const mount = document.querySelector('.wrapper') || document.body;
     mount.appendChild(pixel);
   }
   
