@@ -434,7 +434,7 @@ document.querySelectorAll(".date-range-input").forEach((input) => {
   }
 
   function render() {
-    calendar.innerHTML = `<div class="date-picker-header"><button class="date-picker-nav" type="button" data-calendar-action="previous" aria-label="Previous month">&lsaquo;</button><p class="date-picker-instruction">${checkInDate && !checkOutDate ? "Choose a check-out date" : "Choose your stay dates"}</p><button class="date-picker-nav" type="button" data-calendar-action="next" aria-label="Next month">&rsaquo;</button></div><div class="date-picker-months">${monthMarkup(0)}${monthMarkup(1)}</div>`;
+    calendar.innerHTML = `<div class="date-picker-header"><button class="date-picker-nav" type="button" data-calendar-action="previous" aria-label="Previous month">&lsaquo;</button><button class="date-picker-nav" type="button" data-calendar-action="next" aria-label="Next month">&rsaquo;</button></div><div class="date-picker-months">${monthMarkup(0)}${monthMarkup(1)}</div>`;
   }
 
   function openCalendar() {
