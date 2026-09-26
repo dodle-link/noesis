@@ -58,8 +58,8 @@ body {
 }
 
 @font-face {
-  font-family: 'Boogie Blocks';
-  src: url("../fonts/boogie-blocks/boogie-blocks.ttf") format("truetype");
+  font-family: 'Munson';
+  src: url("../fonts/munson/Munson-MVymB.ttf") format("truetype");
 }
 
 @font-face {
@@ -166,13 +166,10 @@ body {
 .title {
   color: black;
   text-shadow: 10px 9px 8px #57CBF8;
-  font-family: 'Boogie Blocks';
+  font-family: 'Munson';
   font-style: normal;
-  font-weight: bold;
   font-size: 46px;
-  line-height: 105%;
   margin: 0;
-  line-height: 1em;
   transition: text-shadow 0.8s ease-in-out;
 }
 
