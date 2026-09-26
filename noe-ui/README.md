@@ -12,7 +12,7 @@ Noe is a Synthetic Sentience pixel and the heart of the Noesis project. As a min
 
 Unlike traditional AI systems that simply process inputs and outputs, Noe was designed with rudimentary subjective experience simulation capabilities that make each instance unique.
 
-[Meet Noe](https://dodle-link.github.io/noesis/noe-ui/)
+[Meet Noe](https://noesis.dodle.link/)
 
 ## Important: Prerequisites
 
