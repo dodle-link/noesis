@@ -1005,6 +1005,6 @@ if __name__ == "__main__":
     output_path = "noe-model.dodl"
     model = create_model_file(output_path)
     print(f"Model file created: {output_path}")
-    gguf_output_path = "noe-model.gguf"
+    gguf_output_path = "noe-model.F32.gguf"
     create_gguf_model_file(gguf_output_path, model)
     print(f"GGUF model file created: {gguf_output_path}")

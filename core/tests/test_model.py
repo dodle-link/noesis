@@ -140,7 +140,7 @@ class ModelFileTests(unittest.TestCase):
             model_path = os.path.join(directory, "noe-model.dodl")
             with open(model_path, "rb") as model_file:
                 loaded_model = self.model_module.deserialize_model(model_file.read())
-            gguf_path = os.path.join(directory, "noe-model.gguf")
+            gguf_path = os.path.join(directory, "noe-model.F32.gguf")
             with open(gguf_path, "rb") as model_file:
                 gguf_data = model_file.read()
 

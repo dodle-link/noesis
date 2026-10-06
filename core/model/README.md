@@ -19,7 +19,7 @@ cd core/model
 python3 me.py
 ```
 
-This creates `noe-model.dodl` and `noe-model.gguf` in the current directory. The DODL file stores the complete model, including its state, memory, rules, behavior, and network. The GGUF file contains the network's four float32 tensors and architecture dimensions; it uses the custom `noesis` architecture and requires a compatible runtime to execute.
+This creates `noe-model.dodl` and `noe-model.F32.gguf` in the current directory. The `F32` suffix identifies the GGUF file's float32 tensor type. The DODL file stores the complete model, including its state, memory, rules, behavior, and network. The GGUF file contains the network's four float32 tensors and architecture dimensions; it uses the custom `noesis` architecture and requires a compatible runtime to execute.
 
 `create_model_file(path)` is also available when creating a model from Python; it writes the binary DODL format and returns the model object. Pass that model to `create_gguf_model_file(path, model)` to write the matching GGUF file.
 
