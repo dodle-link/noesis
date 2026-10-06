@@ -9,6 +9,8 @@ tags:
 
 `me.py` implements a small stateful AI model. It combines a feed-forward neural network with state, goals, memory, rules, and a behavior program. It uses only the Python standard library.
 
+Live Preview: [noesis.dodle.link/model](https://noesis.dodle.link/model/)
+
 ## Create a model file
 
 Run the script from the `core/model/` directory:
