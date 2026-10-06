@@ -1,3 +1,11 @@
+---
+license: mit
+tags:
+    - noesis
+    - stateful-agent
+    - custom-model-format
+---
+
 # Core Model
 
 `me.py` implements a small stateful AI model. It combines a feed-forward neural network with state, goals, memory, rules, and a behavior program. It uses only the Python standard library.
