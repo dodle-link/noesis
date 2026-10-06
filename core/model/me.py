@@ -608,11 +608,60 @@ def serialize_model(model):
     return header + metadata_bytes + network_bytes
 
 
+def _gguf_string(value):
+    encoded = value.encode("utf-8")
+    return struct.pack("<Q", len(encoded)) + encoded
+
+
+def serialize_gguf_model(model):
+    network = model["network"]
+    tensors = (
+        ("network.weights1", (network["inputSize"], network["hiddenSize"]), network["weights1"]),
+        ("network.bias1", (network["hiddenSize"],), network["bias1"]),
+        ("network.weights2", (network["hiddenSize"], network["outputSize"]), network["weights2"]),
+        ("network.bias2", (network["outputSize"],), network["bias2"]),
+    )
+    metadata = (
+        ("general.architecture", 8, "noesis"),
+        ("general.name", 8, "Noesis Tiny Network"),
+        ("general.alignment", 4, 32),
+        ("noesis.input_size", 4, network["inputSize"]),
+        ("noesis.hidden_size", 4, network["hiddenSize"]),
+        ("noesis.output_size", 4, network["outputSize"]),
+    )
+    metadata_bytes = bytearray(struct.pack("<Q", len(metadata)))
+    for key, value_type, value in metadata:
+        metadata_bytes.extend(_gguf_string(key))
+        metadata_bytes.extend(struct.pack("<I", value_type))
+        metadata_bytes.extend(_gguf_string(value) if value_type == 8 else struct.pack("<I", value))
+
+    tensor_data = bytearray()
+    tensor_descriptors = bytearray(struct.pack("<Q", len(tensors)))
+    for name, dimensions, values in tensors:
+        tensor_data.extend(b"\0" * ((-len(tensor_data)) % 32))
+        offset = len(tensor_data)
+        tensor_data.extend(_float_array_bytes(values))
+        tensor_descriptors.extend(_gguf_string(name))
+        tensor_descriptors.extend(struct.pack("<I", len(dimensions)))
+        tensor_descriptors.extend(struct.pack(f"<{len(dimensions)}Q", *dimensions))
+        tensor_descriptors.extend(struct.pack("<IQ", 0, offset))
+
+    header = b"GGUF" + struct.pack("<IQQ", 3, len(tensors), len(metadata))
+    content = header + metadata_bytes + tensor_descriptors
+    content += b"\0" * ((-len(content)) % 32)
+    return content + tensor_data
+
+
 def create_model_file(path):
     model = create_model()
     with open(path, "wb") as model_file:
         model_file.write(serialize_model(model))
     return model
+
+
+def create_gguf_model_file(path, model):
+    with open(path, "wb") as model_file:
+        model_file.write(serialize_gguf_model(model))
 
 
 def deserialize_model(buffer):
@@ -954,5 +1003,8 @@ class AIEngine:
 
 if __name__ == "__main__":
     output_path = "noe-model.dodl"
-    create_model_file(output_path)
+    model = create_model_file(output_path)
     print(f"Model file created: {output_path}")
+    gguf_output_path = "noe-model.gguf"
+    create_gguf_model_file(gguf_output_path, model)
+    print(f"GGUF model file created: {gguf_output_path}")

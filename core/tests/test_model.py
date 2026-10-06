@@ -2,6 +2,7 @@ import importlib.util
 import io
 import json
 import os
+import struct
 import subprocess
 import sys
 import tempfile
@@ -139,8 +140,17 @@ class ModelFileTests(unittest.TestCase):
             model_path = os.path.join(directory, "noe-model.dodl")
             with open(model_path, "rb") as model_file:
                 loaded_model = self.model_module.deserialize_model(model_file.read())
+            gguf_path = os.path.join(directory, "noe-model.gguf")
+            with open(gguf_path, "rb") as model_file:
+                gguf_data = model_file.read()
 
         self.assertEqual(loaded_model["version"], self.model_module.CONFIG["VERSION"])
+        self.assertEqual(gguf_data[:4], b"GGUF")
+        version, tensor_count = struct.unpack_from("<IQ", gguf_data, 4)
+        self.assertEqual(version, 3)
+        self.assertEqual(tensor_count, 4)
+        for tensor_name in ("network.weights1", "network.bias1", "network.weights2", "network.bias2"):
+            self.assertIn(tensor_name.encode("utf-8"), gguf_data)
 
     def test_openai_provider_extracts_generated_reply(self):
         response = io.BytesIO(

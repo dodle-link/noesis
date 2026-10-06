@@ -19,7 +19,9 @@ cd core/model
 python3 me.py
 ```
 
-This creates `noe-model.dodl` in the current directory. `create_model_file(path)` is also available when creating a model from Python; it writes the binary DODL format and returns the model object.
+This creates `noe-model.dodl` and `noe-model.gguf` in the current directory. The DODL file stores the complete model, including its state, memory, rules, behavior, and network. The GGUF file contains the network's four float32 tensors and architecture dimensions; it uses the custom `noesis` architecture and requires a compatible runtime to execute.
+
+`create_model_file(path)` is also available when creating a model from Python; it writes the binary DODL format and returns the model object. Pass that model to `create_gguf_model_file(path, model)` to write the matching GGUF file.
 
 The path may be a string or another path-like value. Its parent directory must already exist. The file is binary; open it with `"rb"` when reading.
 
@@ -100,6 +102,8 @@ The file starts with the `DODL` magic signature and a versioned header. It store
 - `create_model_file(path)` creates a fresh model and writes it to `path`.
 - `serialize_model(model)` converts a model to DODL bytes.
 - `deserialize_model(data)` converts DODL bytes back to a model.
+- `serialize_gguf_model(model)` converts the network tensors to GGUF v3 bytes.
+- `create_gguf_model_file(path, model)` writes those GGUF bytes to `path`.
 - `merge_models(model_a, model_b, alpha=0.5)` blends compatible models' network parameters.
 - `AIEngine(model=None)` runs and updates a model; without an argument it creates a fresh one.
 - `AIEngine.step(input_value)` observes input, chooses and executes an action, evaluates it, learns, updates state, and returns the cycle result.
