@@ -146,9 +146,15 @@ class ModelFileTests(unittest.TestCase):
 
         self.assertEqual(loaded_model["version"], self.model_module.CONFIG["VERSION"])
         self.assertEqual(gguf_data[:4], b"GGUF")
-        version, tensor_count = struct.unpack_from("<IQ", gguf_data, 4)
+        version, tensor_count, metadata_count = struct.unpack_from("<IQQ", gguf_data, 4)
         self.assertEqual(version, 3)
         self.assertEqual(tensor_count, 4)
+        self.assertEqual(metadata_count, 6)
+        metadata_offset = 24
+        first_key_size = struct.unpack_from("<Q", gguf_data, metadata_offset)[0]
+        metadata_offset += 8
+        first_key = gguf_data[metadata_offset : metadata_offset + first_key_size]
+        self.assertEqual(first_key, b"general.architecture")
         for tensor_name in ("network.weights1", "network.bias1", "network.weights2", "network.bias2"):
             self.assertIn(tensor_name.encode("utf-8"), gguf_data)
 

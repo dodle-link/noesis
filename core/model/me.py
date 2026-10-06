@@ -629,7 +629,7 @@ def serialize_gguf_model(model):
         ("noesis.hidden_size", 4, network["hiddenSize"]),
         ("noesis.output_size", 4, network["outputSize"]),
     )
-    metadata_bytes = bytearray(struct.pack("<Q", len(metadata)))
+    metadata_bytes = bytearray()
     for key, value_type, value in metadata:
         metadata_bytes.extend(_gguf_string(key))
         metadata_bytes.extend(struct.pack("<I", value_type))
