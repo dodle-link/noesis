@@ -5,7 +5,6 @@ tags:
     - stateful-agent
     - custom-model-format
 ---
-
 # Core Model
 
 `me.py` implements a small stateful AI model. It combines a feed-forward neural network with state, goals, memory, rules, and a behavior program. It uses only the Python standard library.
@@ -110,3 +109,14 @@ The file starts with the `DODL` magic signature and a versioned header. It store
 - `LLMProvider(provider=None)` configures an OpenAI or Gemini text-generation adapter from environment variables.
 - `AIEngine.respond(input_value, provider=None)` generates a provider reply and runs one local engine step.
 - `AIEngine.export_model()` serializes the engine's current model.
+
+## License
+
+Noesis is released under the [MIT License](LICENSE). Individual components
+also include their own license files where applicable.
+
+## Contributing
+
+To contribute, create a focused change in the relevant component, update its
+documentation when behavior changes, and run that component's existing checks
+before opening a pull request.
