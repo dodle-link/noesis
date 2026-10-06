@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+# Copyright (c) Napol Thanarangkaun
+# Licensed under the MIT License - See LICENSE file for details
+
 from array import array
 import base64
 import json
