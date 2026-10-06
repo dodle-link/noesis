@@ -39,6 +39,26 @@ class ModelFileTests(unittest.TestCase):
         loaded_model = self.model_module.deserialize_model(data)
         self.assertEqual(loaded_model["version"], model["version"])
 
+    def test_train_pixel_model_writes_browser_compatible_network(self):
+        with tempfile.TemporaryDirectory(prefix="pixel-model-tests-") as directory:
+            path = os.path.join(directory, "pixel.dodl")
+            self.model_module.train_pixel_model(
+                path, sample_count=8, epochs=1, seed=123
+            )
+            with open(path, "rb") as model_file:
+                model_data = model_file.read()
+            with open(os.path.splitext(path)[0] + ".F32.gguf", "rb") as gguf_file:
+                gguf_data = gguf_file.read()
+
+        restored = self.model_module.deserialize_model(model_data)
+
+        network = restored["network"]
+        self.assertEqual(
+            (network["inputSize"], network["hiddenSize"], network["outputSize"]),
+            (8, 32, 2),
+        )
+        self.assertEqual(gguf_data, self.model_module.serialize_gguf_model(restored))
+
     def test_merge_models_interpolates_weights_without_mutating_inputs(self):
         model_a = self.model_module.create_model()
         model_b = self.model_module.create_model()

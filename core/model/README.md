@@ -24,6 +24,24 @@ This creates `noe-model.dodl` and `noe-model.F32.gguf` in the current directory.
 
 The path may be a string or another path-like value. Its parent directory must already exist. The file is binary; open it with `"rb"` when reading.
 
+## Train the pixel controller
+
+The pixel demo uses the same DODL container with a controller-specific network: eight normalized inputs (pixel position and velocity, pointer offset and presence, and excitement) and two steering outputs. Train it from `core/model/`:
+
+```bash
+python3 me.py --train-pixel
+```
+
+This writes `noe-pixel-model.dodl` without replacing the general-purpose `noe-model.dodl`. Training is supervised by a built-in steering policy that moves away from a nearby pointer and screen edges. `--samples`, `--epochs`, `--seed`, and `--output` can be supplied to adjust training, choose another output path, and make training repeatable. The browser runs inference only; it does not update the model.
+
+Serve `core/model/` over HTTP so the browser can fetch the binary model:
+
+```bash
+python3 -m http.server 8000
+```
+
+Then open `http://localhost:8000/`. `index.html` loads `me.js`, which fetches `noe-pixel-model.dodl`; if the file is missing or is not a pixel model, the demo falls back to its built-in steering behavior.
+
 ## Load and use a model
 
 Deserialize the file into a model, then pass it to `AIEngine`:

@@ -3,6 +3,7 @@
 # Licensed under the MIT License - See LICENSE file for details
 
 from array import array
+import argparse
 import base64
 import copy
 import json
@@ -35,6 +36,8 @@ CONFIG = {
 
 MAGIC = b"DODL"
 HEADER_SIZE = 16
+PIXEL_INPUT_SIZE = 8
+PIXEL_OUTPUT_SIZE = 2
 
 
 def clamp(value, minimum, maximum):
@@ -235,6 +238,88 @@ class TinyNetwork:
                     CONFIG["MAX_WEIGHT"],
                 )
             self.bias1[hidden_index] += learning_rate * error
+
+
+def _pixel_training_example(random):
+    x = random.next()
+    y = random.next()
+    velocity_x = random.float(-1, 1)
+    velocity_y = random.float(-1, 1)
+    has_pointer = 1 if random.next() < 0.8 else 0
+    if has_pointer:
+        pointer_x = random.next()
+        pointer_y = random.next()
+        pointer_dx = pointer_x - x
+        pointer_dy = (pointer_y - y) * 0.7
+    else:
+        pointer_dx = 0
+        pointer_dy = 0
+    excitement = random.next()
+    inputs = array(
+        "f",
+        [x, y, velocity_x, velocity_y, pointer_dx, pointer_dy, has_pointer, excitement],
+    )
+
+    distance = math.hypot(pointer_dx, pointer_dy)
+    steering_x = -velocity_x * 0.04
+    steering_y = -velocity_y * 0.04
+    if has_pointer and distance < 0.3 and distance > 0:
+        strength = (0.3 - distance) / 0.3 * (0.65 + excitement * 0.35)
+        steering_x -= pointer_dx / distance * strength
+        steering_y -= pointer_dy / distance * strength
+    if x < 0.08:
+        steering_x += (0.08 - x) / 0.08 * 0.8
+    elif x > 0.92:
+        steering_x -= (x - 0.92) / 0.08 * 0.8
+    if y < 0.08:
+        steering_y += (0.08 - y) / 0.08 * 0.8
+    elif y > 0.92:
+        steering_y -= (y - 0.92) / 0.08 * 0.8
+    targets = array("f", [clamp(steering_x, -1, 1), clamp(steering_y, -1, 1)])
+    return inputs, targets
+
+
+def train_pixel_model(path="noe-pixel-model.dodl", sample_count=1200, epochs=12, seed=None):
+    if not isinstance(sample_count, int) or sample_count < 1:
+        raise ValueError("sample_count must be a positive integer.")
+    if not isinstance(epochs, int) or epochs < 1:
+        raise ValueError("epochs must be a positive integer.")
+
+    random = Random(seed if seed is not None else random_int(1, 0xFFFFFFFF))
+    model = create_model()
+    network = TinyNetwork(random)
+    network.input_size = PIXEL_INPUT_SIZE
+    network.hidden_size = CONFIG["HIDDEN_SIZE"]
+    network.output_size = PIXEL_OUTPUT_SIZE
+    network.weights1 = array("f", [0]) * (network.input_size * network.hidden_size)
+    network.bias1 = array("f", [0]) * network.hidden_size
+    network.weights2 = array("f", [0]) * (network.hidden_size * network.output_size)
+    network.bias2 = array("f", [0]) * network.output_size
+    network.initialize(random)
+
+    examples = [_pixel_training_example(random) for _ in range(sample_count)]
+    for _ in range(epochs):
+        for index in range(sample_count - 1, 0, -1):
+            swap_index = int(random.next() * (index + 1))
+            examples[index], examples[swap_index] = examples[swap_index], examples[index]
+        for inputs, targets in examples:
+            network.learn(inputs, targets, 0.01)
+
+    model["randomSeed"] = random.seed
+    model["network"] = {
+        "inputSize": network.input_size,
+        "hiddenSize": network.hidden_size,
+        "outputSize": network.output_size,
+        "weights1": network.weights1,
+        "bias1": network.bias1,
+        "weights2": network.weights2,
+        "bias2": network.bias2,
+    }
+    with open(path, "wb") as model_file:
+        model_file.write(serialize_model(model))
+    gguf_path = os.path.splitext(os.fsdecode(path))[0] + ".F32.gguf"
+    create_gguf_model_file(gguf_path, model)
+    return model
 
 
 class MemoryStore:
@@ -1002,9 +1087,32 @@ class AIEngine:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Create or train a Noesis model.")
+    parser.add_argument(
+        "--train-pixel",
+        action="store_true",
+        help="Train a pixel steering model and write noe-pixel-model.dodl.",
+    )
+    parser.add_argument("--samples", type=int, default=1200)
+    parser.add_argument("--epochs", type=int, default=12)
+    parser.add_argument("--seed", type=int)
+    parser.add_argument("--output", default="noe-pixel-model.dodl")
+    arguments = parser.parse_args()
+
     output_path = "noe-model.dodl"
-    model = create_model_file(output_path)
-    print(f"Model file created: {output_path}")
-    gguf_output_path = "noe-model.F32.gguf"
-    create_gguf_model_file(gguf_output_path, model)
-    print(f"GGUF model file created: {gguf_output_path}")
+    if arguments.train_pixel:
+        train_pixel_model(
+            arguments.output,
+            sample_count=arguments.samples,
+            epochs=arguments.epochs,
+            seed=arguments.seed,
+        )
+        gguf_output_path = os.path.splitext(arguments.output)[0] + ".F32.gguf"
+        print(f"Pixel control model trained: {arguments.output}")
+        print(f"GGUF model file created: {gguf_output_path}")
+    else:
+        model = create_model_file(output_path)
+        print(f"Model file created: {output_path}")
+        gguf_output_path = "noe-model.F32.gguf"
+        create_gguf_model_file(gguf_output_path, model)
+        print(f"GGUF model file created: {gguf_output_path}")
