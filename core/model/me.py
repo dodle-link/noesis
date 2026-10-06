@@ -446,6 +446,13 @@ def serialize_model(model):
     return header + metadata_bytes + network_bytes
 
 
+def create_model_file(path):
+    model = create_model()
+    with open(path, "wb") as model_file:
+        model_file.write(serialize_model(model))
+    return model
+
+
 def deserialize_model(buffer):
     buffer = bytes(buffer)
     if len(buffer) < HEADER_SIZE or buffer[:4] != MAGIC:
@@ -670,3 +677,9 @@ class AIEngine:
 
     def get_behavior(self):
         return self.behavior.program
+
+
+if __name__ == "__main__":
+    output_path = "noe-model.dodl"
+    create_model_file(output_path)
+    print(f"Model file created: {output_path}")
