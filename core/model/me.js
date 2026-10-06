@@ -1,3 +1,6 @@
+// Copyright (c) Napol Thanarangkaun
+// Licensed under the MIT License - See LICENSE file for details
+
 const pixel = document.querySelector(".pixel");
 const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
 const pixelSize = 5;
