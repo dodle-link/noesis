@@ -409,7 +409,90 @@ def create_model():
     }
 
 
+def load_model_file(path):
+    path = os.fspath(path)
+    with open(path, "rb") as model_file:
+        data = model_file.read()
+    if data.startswith(MAGIC):
+        return deserialize_model(data)
+    if os.path.splitext(path)[1].lower() != ".onnx":
+        raise ValueError("Unsupported model file format.")
+    try:
+        import onnx
+    except ImportError as error:
+        raise ValueError("Loading ONNX models requires the 'onnx' package.") from error
+
+    onnx_model = onnx.load(path)
+    nodes = list(onnx_model.graph.node)
+    if len(nodes) != 3 or [node.op_type for node in nodes] != ["Gemm", "Relu", "Gemm"]:
+        raise ValueError("ONNX models must contain a Gemm -> Relu -> Gemm network.")
+    first_gemm, relu, second_gemm = nodes
+    if (
+        first_gemm.output[0] != relu.input[0]
+        or relu.output[0] != second_gemm.input[0]
+        or len(first_gemm.input) < 2
+        or len(second_gemm.input) < 2
+    ):
+        raise ValueError("ONNX model layers are not connected as Gemm -> Relu -> Gemm.")
+
+    initializers = {
+        initializer.name: onnx.numpy_helper.to_array(initializer)
+        for initializer in onnx_model.graph.initializer
+    }
+
+    def get_gemm_parameters(node):
+        attributes = {attribute.name: attribute.i for attribute in node.attribute}
+        if attributes.get("transA", 0):
+            raise ValueError("ONNX Gemm layers with transA are not supported.")
+        try:
+            weights = initializers[node.input[1]]
+            weights = weights.tolist() if hasattr(weights, "tolist") else weights
+            if not weights or not isinstance(weights[0], (list, tuple)):
+                raise ValueError("ONNX Gemm weights must be two-dimensional.")
+            weights = [list(row) for row in weights]
+            if not attributes.get("transB", 0):
+                weights = [list(row) for row in zip(*weights)]
+            bias = initializers[node.input[2]] if len(node.input) > 2 else None
+        except KeyError as error:
+            raise ValueError("ONNX Gemm weights and biases must be initializers.") from error
+        if not weights or not weights[0] or any(len(row) != len(weights[0]) for row in weights):
+            raise ValueError("ONNX Gemm weights must be a non-empty rectangular matrix.")
+        if bias is None:
+            bias = [0.0] * len(weights)
+        else:
+            bias = bias.tolist() if hasattr(bias, "tolist") else list(bias)
+        if len(bias) != len(weights):
+            raise ValueError("ONNX Gemm bias dimensions do not match its weights.")
+        alpha = next((attribute.f for attribute in node.attribute if attribute.name == "alpha"), 1.0)
+        beta = next((attribute.f for attribute in node.attribute if attribute.name == "beta"), 1.0)
+        return (
+            [[value * alpha for value in row] for row in weights],
+            [value * beta for value in bias],
+        )
+
+    weights1, bias1 = get_gemm_parameters(first_gemm)
+    weights2, bias2 = get_gemm_parameters(second_gemm)
+    if len(weights2[0]) != len(weights1):
+        raise ValueError("ONNX Gemm layer dimensions do not match.")
+
+    model = create_model()
+    model["network"] = {
+        "inputSize": len(weights1[0]),
+        "hiddenSize": len(weights1),
+        "outputSize": len(weights2),
+        "weights1": array("f", (value for row in weights1 for value in row)),
+        "bias1": array("f", bias1),
+        "weights2": array("f", (value for row in weights2 for value in row)),
+        "bias2": array("f", bias2),
+    }
+    return model
+
+
 def merge_models(model_a, model_b, alpha=0.5):
+    if not isinstance(model_a, dict):
+        model_a = load_model_file(model_a)
+    if not isinstance(model_b, dict):
+        model_b = load_model_file(model_b)
     if isinstance(alpha, bool) or not isinstance(alpha, (int, float)) or not math.isfinite(alpha):
         raise ValueError("alpha must be a finite number between 0 and 1.")
     if not 0 <= alpha <= 1:
@@ -420,28 +503,57 @@ def merge_models(model_a, model_b, alpha=0.5):
     network_a = model_a["network"]
     network_b = model_b["network"]
     shape_keys = ("inputSize", "hiddenSize", "outputSize")
-    if any(network_a[key] != network_b[key] for key in shape_keys):
-        raise ValueError("Models must have matching network shapes.")
+    shape_a = tuple(network_a[key] for key in shape_keys)
+    shape_b = tuple(network_b[key] for key in shape_keys)
 
-    input_size = network_a["inputSize"]
-    hidden_size = network_a["hiddenSize"]
-    output_size = network_a["outputSize"]
-    expected_lengths = {
-        "weights1": input_size * hidden_size,
-        "bias1": hidden_size,
-        "weights2": hidden_size * output_size,
-        "bias2": output_size,
-    }
+    def expected_lengths(shape):
+        input_size, hidden_size, output_size = shape
+        if any(not isinstance(size, int) or size <= 0 for size in shape):
+            raise ValueError("Models have invalid network shapes.")
+        return {
+            "weights1": input_size * hidden_size,
+            "bias1": hidden_size,
+            "weights2": hidden_size * output_size,
+            "bias2": output_size,
+        }
+
+    lengths_a = expected_lengths(shape_a)
+    lengths_b = expected_lengths(shape_b)
+    for key in lengths_a:
+        if len(network_a[key]) != lengths_a[key] or len(network_b[key]) != lengths_b[key]:
+            raise ValueError(f"Models have invalid {key} array lengths.")
+
     merged = copy.deepcopy(model_a)
     merged["id"] = list(secrets.token_bytes(16))
     merged["createdAt"] = now()
     merged["updatedAt"] = merged["createdAt"]
+    for key, size in zip(shape_keys, shape_b):
+        merged["network"][key] = size
 
-    for key, expected_length in expected_lengths.items():
-        values_a = network_a[key]
+    input_size, hidden_size, output_size = shape_b
+    adapted_a = {}
+    for key, rows_a, columns_a, rows_b, columns_b in (
+        ("weights1", shape_a[1], shape_a[0], hidden_size, input_size),
+        ("weights2", shape_a[2], shape_a[1], output_size, hidden_size),
+    ):
+        values = list(network_b[key])
+        source = network_a[key]
+        for row in range(min(rows_a, rows_b)):
+            for column in range(min(columns_a, columns_b)):
+                values[row * columns_b + column] = source[row * columns_a + column]
+        adapted_a[key] = values
+
+    for key, source_size, target_size in (
+        ("bias1", shape_a[1], hidden_size),
+        ("bias2", shape_a[2], output_size),
+    ):
+        values = list(network_b[key])
+        values[: min(source_size, target_size)] = network_a[key][: min(source_size, target_size)]
+        adapted_a[key] = values
+
+    for key, expected_length in lengths_b.items():
+        values_a = adapted_a[key]
         values_b = network_b[key]
-        if len(values_a) != expected_length or len(values_b) != expected_length:
-            raise ValueError(f"Models have invalid {key} array lengths.")
         merged["network"][key] = array(
             "f",
             ((1 - alpha) * value_a + alpha * value_b for value_a, value_b in zip(values_a, values_b)),
@@ -691,18 +803,23 @@ class AIEngine:
         self.goals = self.model["goals"]
 
     def encode_input(self, input_value):
-        vector = array("f", [0]) * CONFIG["INPUT_SIZE"]
-        vector[0] = self.state["energy"] / 100
-        vector[1] = self.state["curiosity"] / 100
-        vector[2] = self.state["confidence"] / 100
-        vector[3] = self.state["stability"] / 100
+        vector = array("f", [0]) * self.network.input_size
+        state_features = (
+            self.state["energy"] / 100,
+            self.state["curiosity"] / 100,
+            self.state["confidence"] / 100,
+            self.state["stability"] / 100,
+        )
+        for index, value in enumerate(state_features[: len(vector)]):
+            vector[index] = value
         if isinstance(input_value, dict):
             value = input_value.get("value")
-            if isinstance(value, str):
+            if isinstance(value, str) and len(vector) > 4:
                 vector[4] = min(len(value) / 100, 1)
-            if input_value.get("type") == "user_input":
+            if input_value.get("type") == "user_input" and len(vector) > 5:
                 vector[5] = 1
-        vector[6] = min(len(self.memory.items) / CONFIG["MEMORY_LIMIT"], 1)
+        if len(vector) > 6:
+            vector[6] = min(len(self.memory.items) / CONFIG["MEMORY_LIMIT"], 1)
         return vector
 
     def observe(self, input_value):
@@ -745,7 +862,7 @@ class AIEngine:
 
     def learn(self, evaluation):
         input_vector = self.encode_input(evaluation["perception"]["input"])
-        target = array("f", [evaluation["reward"]]) * CONFIG["OUTPUT_SIZE"]
+        target = array("f", [evaluation["reward"]]) * self.network.output_size
         self.network.learn(input_vector, target, CONFIG["LEARNING_RATE"])
         action = evaluation["action"]
         if action["ruleId"]:

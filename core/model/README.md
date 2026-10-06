@@ -47,25 +47,19 @@ with open("noe-model.dodl", "wb") as model_file:
 
 ## Merge compatible models
 
-`merge_models(model_a, model_b, alpha=0.5)` interpolates corresponding network parameters. `alpha=0` keeps model A's parameters, `alpha=1` uses model B's, and values in between blend the two. Both models must have the same version and network shape. The merged model keeps model A's state, rules, memory, behavior, and goals, while receiving a new ID and timestamps.
+`merge_models(model_a, model_b, alpha=0.5)` interpolates corresponding network parameters. `alpha=0` keeps model A's parameters, `alpha=1` uses model B's, and values in between blend the two. Model B defines the merged network architecture; when dimensions differ, overlapping parameters from model A are mapped by index and any additional dimensions retain model B's parameters. The merged model keeps model A's state, rules, memory, behavior, and goals, while receiving a new ID and timestamps.
 
-Load both files into model dictionaries, merge them, then serialize the result:
+Pass DODL model dictionaries or supported model-file paths, merge them, then serialize the result:
 
 ```python
-from model.me import deserialize_model, merge_models, serialize_model
+from model.me import merge_models, serialize_model
 
-with open("model-a.dodl", "rb") as model_file:
-    model_a = deserialize_model(model_file.read())
-
-with open("model-b.dodl", "rb") as model_file:
-    model_b = deserialize_model(model_file.read())
-
-merged = merge_models(model_a, model_b, alpha=0.5)
+merged = merge_models("model-a.dodl", "model-b.onnx", alpha=0.5)
 with open("merged-model.dodl", "wb") as model_file:
     model_file.write(serialize_model(merged))
 ```
 
-This merges weights and biases only; it does not combine memories, rules, or other model metadata. Direct parameter averaging may work poorly for independently trained networks, even when their shapes match. Other model formats require a format-specific importer before their parameters can be merged.
+ONNX loading requires `pip install onnx` and supports a graph consisting of `Gemm → Relu → Gemm` with weights and biases stored as initializers. The imported ONNX dimensions are preserved in the merged DODL model. This merges weights and biases only; it does not combine memories, rules, or other model metadata. Direct parameter averaging may work poorly for independently trained networks, even when their shapes match.
 
 ## Generate a reply with OpenAI or Gemini
 

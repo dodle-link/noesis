@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -66,10 +67,60 @@ class ModelFileTests(unittest.TestCase):
         model_b = self.model_module.create_model()
         model_b["network"]["hiddenSize"] += 1
 
-        with self.assertRaisesRegex(ValueError, "network shapes"):
+        with self.assertRaisesRegex(ValueError, "weights1 array lengths"):
             self.model_module.merge_models(model_a, model_b)
         with self.assertRaisesRegex(ValueError, "alpha"):
             self.model_module.merge_models(model_a, model_a, alpha=1.1)
+
+    def test_merge_models_loads_onnx_and_adopts_its_architecture(self):
+        def gemm(inputs, output):
+            return SimpleNamespace(
+                op_type="Gemm",
+                input=inputs,
+                output=[output],
+                attribute=[SimpleNamespace(name="transB", i=1, f=1.0)],
+            )
+
+        nodes = [
+            gemm(["input", "weights1", "bias1"], "hidden"),
+            SimpleNamespace(op_type="Relu", input=["hidden"], output=["activated"]),
+            gemm(["activated", "weights2", "bias2"], "output"),
+        ]
+        initializers = [
+            SimpleNamespace(name="weights1", value=[[1, 2, 3], [4, 5, 6]]),
+            SimpleNamespace(name="bias1", value=[7, 8]),
+            SimpleNamespace(name="weights2", value=[[9, 10], [11, 12]]),
+            SimpleNamespace(name="bias2", value=[13, 14]),
+        ]
+        onnx_module = SimpleNamespace(
+            load=lambda path: SimpleNamespace(
+                graph=SimpleNamespace(node=nodes, initializer=initializers)
+            ),
+            numpy_helper=SimpleNamespace(to_array=lambda initializer: initializer.value),
+        )
+        model_a = self.model_module.create_model()
+        for key in ("weights1", "bias1", "weights2", "bias2"):
+            model_a["network"][key] = self.model_module.array(
+                "f", [2] * len(model_a["network"][key])
+            )
+
+        with tempfile.TemporaryDirectory(prefix="onnx-model-tests-") as directory:
+            path = os.path.join(directory, "other-model.onnx")
+            with open(path, "wb") as model_file:
+                model_file.write(b"onnx")
+            with patch.dict(sys.modules, {"onnx": onnx_module}):
+                merged = self.model_module.merge_models(model_a, path, alpha=0.5)
+
+        network = merged["network"]
+        self.assertEqual(
+            (network["inputSize"], network["hiddenSize"], network["outputSize"]),
+            (3, 2, 2),
+        )
+        self.assertEqual(list(network["weights1"]), [1.5, 2, 2.5, 3, 3.5, 4])
+        self.assertEqual(list(network["weights2"]), [5.5, 6, 6.5, 7])
+        engine = self.model_module.AIEngine(merged)
+        self.assertEqual(len(engine.encode_input({"type": "user_input", "value": "test"})), 3)
+        engine.step({"type": "user_input", "value": "test"})
 
     def test_running_script_creates_default_model_file(self):
         script_path = os.path.join(
