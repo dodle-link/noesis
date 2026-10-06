@@ -112,7 +112,7 @@ The file starts with the `DODL` magic signature and a versioned header. It store
 
 ## License
 
-Noesis is released under the [MIT License](LICENSE). Individual components
+Noesis is released under the [MIT License](https://huggingface.co/dodle/noesis/blob/main/LICENSE). Individual components
 also include their own license files where applicable.
 
 ## Contributing
