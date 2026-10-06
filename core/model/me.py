@@ -4,6 +4,7 @@
 
 from array import array
 import base64
+import copy
 import json
 import math
 import os
@@ -406,6 +407,47 @@ def create_model():
         "state": create_initial_state(),
         "goals": create_initial_goals(),
     }
+
+
+def merge_models(model_a, model_b, alpha=0.5):
+    if isinstance(alpha, bool) or not isinstance(alpha, (int, float)) or not math.isfinite(alpha):
+        raise ValueError("alpha must be a finite number between 0 and 1.")
+    if not 0 <= alpha <= 1:
+        raise ValueError("alpha must be between 0 and 1.")
+    if model_a["version"] != model_b["version"]:
+        raise ValueError("Models must have matching versions.")
+
+    network_a = model_a["network"]
+    network_b = model_b["network"]
+    shape_keys = ("inputSize", "hiddenSize", "outputSize")
+    if any(network_a[key] != network_b[key] for key in shape_keys):
+        raise ValueError("Models must have matching network shapes.")
+
+    input_size = network_a["inputSize"]
+    hidden_size = network_a["hiddenSize"]
+    output_size = network_a["outputSize"]
+    expected_lengths = {
+        "weights1": input_size * hidden_size,
+        "bias1": hidden_size,
+        "weights2": hidden_size * output_size,
+        "bias2": output_size,
+    }
+    merged = copy.deepcopy(model_a)
+    merged["id"] = list(secrets.token_bytes(16))
+    merged["createdAt"] = now()
+    merged["updatedAt"] = merged["createdAt"]
+
+    for key, expected_length in expected_lengths.items():
+        values_a = network_a[key]
+        values_b = network_b[key]
+        if len(values_a) != expected_length or len(values_b) != expected_length:
+            raise ValueError(f"Models have invalid {key} array lengths.")
+        merged["network"][key] = array(
+            "f",
+            ((1 - alpha) * value_a + alpha * value_b for value_a, value_b in zip(values_a, values_b)),
+        )
+
+    return merged
 
 
 def validate_model(model):

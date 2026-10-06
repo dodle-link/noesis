@@ -37,6 +37,40 @@ class ModelFileTests(unittest.TestCase):
         loaded_model = self.model_module.deserialize_model(data)
         self.assertEqual(loaded_model["version"], model["version"])
 
+    def test_merge_models_interpolates_weights_without_mutating_inputs(self):
+        model_a = self.model_module.create_model()
+        model_b = self.model_module.create_model()
+        network_keys = ("weights1", "bias1", "weights2", "bias2")
+        for key in network_keys:
+            model_a["network"][key] = self.model_module.array(
+                "f", [2] * len(model_a["network"][key])
+            )
+            model_b["network"][key] = self.model_module.array(
+                "f", [6] * len(model_b["network"][key])
+            )
+
+        merged = self.model_module.merge_models(model_a, model_b, alpha=0.25)
+
+        for key in network_keys:
+            self.assertEqual(set(merged["network"][key]), {3.0})
+            self.assertEqual(set(model_a["network"][key]), {2.0})
+            self.assertEqual(set(model_b["network"][key]), {6.0})
+        self.assertNotEqual(merged["id"], model_a["id"])
+        restored = self.model_module.deserialize_model(
+            self.model_module.serialize_model(merged)
+        )
+        self.assertEqual(set(restored["network"]["weights1"]), {3.0})
+
+    def test_merge_models_rejects_incompatible_shapes_and_alpha(self):
+        model_a = self.model_module.create_model()
+        model_b = self.model_module.create_model()
+        model_b["network"]["hiddenSize"] += 1
+
+        with self.assertRaisesRegex(ValueError, "network shapes"):
+            self.model_module.merge_models(model_a, model_b)
+        with self.assertRaisesRegex(ValueError, "alpha"):
+            self.model_module.merge_models(model_a, model_a, alpha=1.1)
+
     def test_running_script_creates_default_model_file(self):
         script_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),

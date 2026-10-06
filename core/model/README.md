@@ -45,6 +45,28 @@ with open("noe-model.dodl", "wb") as model_file:
     model_file.write(engine.export_model())
 ```
 
+## Merge compatible models
+
+`merge_models(model_a, model_b, alpha=0.5)` interpolates corresponding network parameters. `alpha=0` keeps model A's parameters, `alpha=1` uses model B's, and values in between blend the two. Both models must have the same version and network shape. The merged model keeps model A's state, rules, memory, behavior, and goals, while receiving a new ID and timestamps.
+
+Load both files into model dictionaries, merge them, then serialize the result:
+
+```python
+from model.me import deserialize_model, merge_models, serialize_model
+
+with open("model-a.dodl", "rb") as model_file:
+    model_a = deserialize_model(model_file.read())
+
+with open("model-b.dodl", "rb") as model_file:
+    model_b = deserialize_model(model_file.read())
+
+merged = merge_models(model_a, model_b, alpha=0.5)
+with open("merged-model.dodl", "wb") as model_file:
+    model_file.write(serialize_model(merged))
+```
+
+This merges weights and biases only; it does not combine memories, rules, or other model metadata. Direct parameter averaging may work poorly for independently trained networks, even when their shapes match. Other model formats require a format-specific importer before their parameters can be merged.
+
 ## Generate a reply with OpenAI or Gemini
 
 `LLMProvider` sends the input, current state, and up to five recent memories to OpenAI or Gemini. It uses Python's standard library, so no provider SDK is required. Set the provider and its API key in the environment; credentials are never stored in the DODL file:
@@ -84,6 +106,7 @@ The file starts with the `DODL` magic signature and a versioned header. It store
 - `create_model_file(path)` creates a fresh model and writes it to `path`.
 - `serialize_model(model)` converts a model to DODL bytes.
 - `deserialize_model(data)` converts DODL bytes back to a model.
+- `merge_models(model_a, model_b, alpha=0.5)` blends compatible models' network parameters.
 - `AIEngine(model=None)` runs and updates a model; without an argument it creates a fresh one.
 - `AIEngine.step(input_value)` observes input, chooses and executes an action, evaluates it, learns, updates state, and returns the cycle result.
 - `LLMProvider(provider=None)` configures an OpenAI or Gemini text-generation adapter from environment variables.
