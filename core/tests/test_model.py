@@ -155,6 +155,21 @@ class ModelFileTests(unittest.TestCase):
         metadata_offset += 8
         first_key = gguf_data[metadata_offset : metadata_offset + first_key_size]
         self.assertEqual(first_key, b"general.architecture")
+        descriptor_offset = 24
+        for _ in range(metadata_count):
+            key_size = struct.unpack_from("<Q", gguf_data, descriptor_offset)[0]
+            descriptor_offset += 8 + key_size
+            value_type = struct.unpack_from("<I", gguf_data, descriptor_offset)[0]
+            descriptor_offset += 4
+            if value_type == 8:
+                value_size = struct.unpack_from("<Q", gguf_data, descriptor_offset)[0]
+                descriptor_offset += 8 + value_size
+            else:
+                descriptor_offset += 4
+        tensor_name_size = struct.unpack_from("<Q", gguf_data, descriptor_offset)[0]
+        descriptor_offset += 8
+        tensor_name = gguf_data[descriptor_offset : descriptor_offset + tensor_name_size]
+        self.assertEqual(tensor_name, b"network.weights1")
         for tensor_name in ("network.weights1", "network.bias1", "network.weights2", "network.bias2"):
             self.assertIn(tensor_name.encode("utf-8"), gguf_data)
 

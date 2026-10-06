@@ -636,7 +636,7 @@ def serialize_gguf_model(model):
         metadata_bytes.extend(_gguf_string(value) if value_type == 8 else struct.pack("<I", value))
 
     tensor_data = bytearray()
-    tensor_descriptors = bytearray(struct.pack("<Q", len(tensors)))
+    tensor_descriptors = bytearray()
     for name, dimensions, values in tensors:
         tensor_data.extend(b"\0" * ((-len(tensor_data)) % 32))
         offset = len(tensor_data)
