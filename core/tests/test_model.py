@@ -27,6 +27,71 @@ class ModelFileTests(unittest.TestCase):
     def setUpClass(cls):
         cls.model_module = _load_model_module()
 
+    def test_tiny_network_backprop_uses_pre_update_output_weights(self):
+        network = self.model_module.TinyNetwork(self.model_module.Random(1))
+        network.input_size = 1
+        network.hidden_size = 1
+        network.output_size = 1
+        network.weights1 = self.model_module.array("f", [1])
+        network.bias1 = self.model_module.array("f", [0])
+        network.weights2 = self.model_module.array("f", [2])
+        network.bias2 = self.model_module.array("f", [0])
+
+        network.learn(
+            self.model_module.array("f", [1]),
+            self.model_module.array("f", [0]),
+            0.1,
+        )
+
+        self.assertAlmostEqual(network.weights2[0], 1.8)
+        self.assertAlmostEqual(network.weights1[0], 0.6)
+
+    def test_behavior_engine_respects_outer_branch_around_nested_if(self):
+        program = [
+            ["READ", "energy"],
+            ["LESS_THAN", 20],
+            ["IF"],
+            ["READ", "curiosity"],
+            ["GREATER_THAN", 70],
+            ["IF"],
+            ["ACTION", "explore"],
+            ["ELSE"],
+            ["ACTION", "rest"],
+            ["END"],
+            ["ELSE"],
+            ["ACTION", "observe"],
+            ["END"],
+        ]
+
+        action = self.model_module.BehaviorEngine(program).run(
+            {"energy": 50, "curiosity": 80}
+        )
+
+        self.assertEqual(action, "observe")
+
+    def test_serialize_model_rejects_invalid_network_array_lengths(self):
+        model = self.model_module.create_model()
+        model["network"]["weights1"].pop()
+
+        with self.assertRaisesRegex(ValueError, "weights1 array length"):
+            self.model_module.serialize_model(model)
+
+    def test_deserialize_model_rejects_nonpositive_network_dimensions(self):
+        data = self.model_module.serialize_model(self.model_module.create_model())
+        version, _, metadata_size, network_size = struct.unpack_from("<HHII", data, 4)
+        metadata = json.loads(data[16 : 16 + metadata_size])
+        metadata["networkShape"]["inputSize"] = 0
+        metadata_bytes = json.dumps(metadata, separators=(",", ":")).encode("utf-8")
+        malformed_data = (
+            self.model_module.MAGIC
+            + struct.pack("<HHII", version, 0, len(metadata_bytes), network_size)
+            + metadata_bytes
+            + data[16 + metadata_size :]
+        )
+
+        with self.assertRaisesRegex(ValueError, "Invalid network shape"):
+            self.model_module.deserialize_model(malformed_data)
+
     def test_create_model_file_writes_deserializable_model(self):
         with tempfile.TemporaryDirectory(prefix="model-tests-") as directory:
             path = os.path.join(directory, "test.dodl")

@@ -9,6 +9,8 @@ tags:
 
 `me.py` implements a small stateful AI model. It combines a feed-forward neural network with state, goals, memory, rules, and a behavior program. It uses only the Python standard library.
 
+The engine selects actions from enabled rules, falling back to its behavior program. The neural network's output is included in each step's interpretation, but it does not currently select the action.
+
 Live Preview: [noesis.dodle.link/model](https://noesis.dodle.link/model/)
 
 ## Create a model file
@@ -113,7 +115,7 @@ with open("noe-model.dodl", "wb") as model_file:
 
 The file starts with the `DODL` magic signature and a versioned header. It stores JSON metadata followed by the neural network's float32 arrays. The format is intended for this module's serializer and deserializer; it is not a JSON document.
 
-`serialize_model()` validates the memory, rule, and behavior limits and rejects files larger than 1 MiB. `deserialize_model()` checks the signature, format version, network shape, and encoded size before returning a model.
+`serialize_model()` validates the memory, rule, and behavior limits, requires positive network dimensions and matching tensor lengths, and rejects non-finite tensor values. It rejects files larger than 1 MiB. `deserialize_model()` checks the signature, format version, metadata version, positive network dimensions, tensor lengths, and payload size; files larger than 1 MiB are rejected.
 
 ## Main API
 

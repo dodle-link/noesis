@@ -207,10 +207,18 @@ class TinyNetwork:
         result = self.forward(input_vector)
         hidden = result["hidden"]
         output = result["output"]
-        output_errors = array("f", [0]) * self.output_size
+        hidden_errors = array("f", [0]) * self.hidden_size
+        for hidden_index in range(self.hidden_size):
+            if hidden[hidden_index] <= 0:
+                continue
+            for output_index in range(self.output_size):
+                hidden_errors[hidden_index] += (
+                    (target[output_index] - output[output_index])
+                    * self.weights2[output_index * self.hidden_size + hidden_index]
+                )
+
         for output_index in range(self.output_size):
             output_error = target[output_index] - output[output_index]
-            output_errors[output_index] = output_error
             start = output_index * self.hidden_size
             for hidden_index in range(self.hidden_size):
                 index = start + hidden_index
@@ -222,13 +230,7 @@ class TinyNetwork:
             self.bias2[output_index] += learning_rate * output_error
 
         for hidden_index in range(self.hidden_size):
-            error = 0
-            for output_index in range(self.output_size):
-                error += output_errors[output_index] * self.weights2[
-                    output_index * self.hidden_size + hidden_index
-                ]
-            if hidden[hidden_index] <= 0:
-                error = 0
+            error = hidden_errors[hidden_index]
             start = hidden_index * self.input_size
             for input_index in range(self.input_size):
                 index = start + input_index
@@ -422,49 +424,65 @@ class BehaviorEngine:
 
     def run(self, state):
         action = "observe"
-        stack = []
-        skip = False
+        value_stack = []
+        conditions = []
         for index, instruction in enumerate(self.program):
             if index >= CONFIG["BEHAVIOR_LIMIT"]:
                 break
+            if not instruction:
+                continue
             op = instruction[0]
             arg = instruction[1] if len(instruction) > 1 else None
             if op == "READ":
-                stack.append(state.get(arg))
+                value_stack.append(state.get(arg))
             elif op == "LESS_THAN":
-                stack.append(_js_number(stack.pop()) < arg)
+                value = value_stack.pop() if value_stack else None
+                value_stack.append(_js_number(value) < arg)
             elif op == "GREATER_THAN":
-                stack.append(_js_number(stack.pop()) > arg)
+                value = value_stack.pop() if value_stack else None
+                value_stack.append(_js_number(value) > arg)
             elif op == "IF":
-                condition = bool(stack.pop())
-                stack.append({"type": "if", "condition": condition, "active": condition})
-                skip = not condition
+                condition = bool(value_stack.pop()) if value_stack else False
+                conditions.append({"condition": condition, "in_else": False})
             elif op == "ELSE":
-                block = stack.pop() if stack else None
-                if isinstance(block, dict) and block.get("type") == "if":
-                    block["active"] = not block["condition"]
-                    stack.append(block)
-                    skip = not block["active"]
-            elif op == "ACTION" and not skip:
+                if conditions:
+                    conditions[-1]["in_else"] = True
+            elif op == "ACTION" and all(
+                condition["condition"] != condition["in_else"]
+                for condition in conditions
+            ):
                 action = arg
             elif op == "END":
-                skip = False
+                if conditions:
+                    conditions.pop()
         return action
 
     def mutate(self, random):
         if len(self.program) >= CONFIG["BEHAVIOR_LIMIT"]:
             return
         actions = ["rest", "explore", "observe", "learn"]
-        mutation = random_int(0, 2)
+        mutation = int(random.next() * 3)
         if mutation == 0:
-            self.program.append(["ACTION", actions[random_int(0, len(actions) - 1)]])
+            action_index = int(random.next() * len(actions))
+            self.program.append(["ACTION", actions[action_index]])
         elif mutation == 1:
-            if len(self.program) > 3:
-                self.program.pop(random_int(0, len(self.program) - 1))
+            action_indexes = [
+                index
+                for index, instruction in enumerate(self.program)
+                if instruction and instruction[0] == "ACTION"
+            ]
+            if action_indexes:
+                index = action_indexes[int(random.next() * len(action_indexes))]
+                self.program.pop(index)
         else:
-            instruction = self.program[random_int(0, len(self.program) - 1)]
-            if instruction[0] in ("LESS_THAN", "GREATER_THAN"):
-                instruction[1] = random_int(5, 95)
+            comparisons = [
+                instruction
+                for instruction in self.program
+                if instruction and instruction[0] in ("LESS_THAN", "GREATER_THAN")
+            ]
+            if comparisons:
+                instruction = comparisons[int(random.next() * len(comparisons))]
+                instruction[1] = int(random.next() * 91) + 5
 
 
 def create_model():
@@ -648,12 +666,43 @@ def merge_models(model_a, model_b, alpha=0.5):
 
 
 def validate_model(model):
-    if len(model["memory"]) > CONFIG["MEMORY_LIMIT"]:
-        raise ValueError("Memory limit exceeded.")
-    if len(model["rules"]) > CONFIG["RULE_LIMIT"]:
-        raise ValueError("Rule limit exceeded.")
-    if len(model["behavior"]) > CONFIG["BEHAVIOR_LIMIT"]:
-        raise ValueError("Behavior limit exceeded.")
+    if not isinstance(model, dict):
+        raise ValueError("Model must be an object.")
+    for key, limit in (
+        ("memory", CONFIG["MEMORY_LIMIT"]),
+        ("rules", CONFIG["RULE_LIMIT"]),
+        ("behavior", CONFIG["BEHAVIOR_LIMIT"]),
+    ):
+        values = model.get(key)
+        if not isinstance(values, list):
+            raise ValueError(f"Model {key} must be a list.")
+        if len(values) > limit:
+            raise ValueError(f"{key.capitalize()} limit exceeded.")
+
+    network = model.get("network")
+    if not isinstance(network, dict):
+        raise ValueError("Model network must be an object.")
+    shape = tuple(network.get(key) for key in ("inputSize", "hiddenSize", "outputSize"))
+    if any(not isinstance(size, int) or isinstance(size, bool) or size <= 0 for size in shape):
+        raise ValueError("Invalid network shape.")
+    input_size, hidden_size, output_size = shape
+    expected_lengths = {
+        "weights1": input_size * hidden_size,
+        "bias1": hidden_size,
+        "weights2": hidden_size * output_size,
+        "bias2": output_size,
+    }
+    for key, expected_length in expected_lengths.items():
+        values = network.get(key)
+        if not isinstance(values, (array, list, tuple)) or len(values) != expected_length:
+            raise ValueError(f"Model has invalid {key} array length.")
+        for value in values:
+            try:
+                is_finite = math.isfinite(value)
+            except (OverflowError, TypeError, ValueError) as error:
+                raise ValueError(f"Model {key} values must be finite numbers.") from error
+            if not is_finite:
+                raise ValueError(f"Model {key} values must be finite numbers.")
     return True
 
 
@@ -751,7 +800,7 @@ def create_gguf_model_file(path, model):
 
 def deserialize_model(buffer):
     buffer = bytes(buffer)
-    if len(buffer) < HEADER_SIZE or buffer[:4] != MAGIC:
+    if len(buffer) < HEADER_SIZE or len(buffer) > CONFIG["MAX_FILE_SIZE"] or buffer[:4] != MAGIC:
         raise ValueError("Invalid DODL model file.")
     version, _, metadata_size, network_size = struct.unpack_from("<HHII", buffer, 4)
     if version != CONFIG["VERSION"]:
@@ -759,19 +808,27 @@ def deserialize_model(buffer):
     if HEADER_SIZE + metadata_size + network_size != len(buffer):
         raise ValueError("Corrupt model size.")
     metadata_start = HEADER_SIZE
-    metadata = json.loads(buffer[metadata_start : metadata_start + metadata_size].decode("utf-8"))
-    shape = metadata["networkShape"]
-    input_size = shape["inputSize"]
-    hidden_size = shape["hiddenSize"]
-    output_size = shape["outputSize"]
+    try:
+        metadata = json.loads(buffer[metadata_start : metadata_start + metadata_size].decode("utf-8"))
+        if not isinstance(metadata, dict) or metadata.get("version") != version:
+            raise ValueError("Invalid model metadata.")
+        shape = metadata["networkShape"]
+        input_size = shape["inputSize"]
+        hidden_size = shape["hiddenSize"]
+        output_size = shape["outputSize"]
+    except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
+        raise ValueError("Invalid DODL model metadata.") from error
+    if any(
+        not isinstance(size, int) or isinstance(size, bool) or size <= 0
+        for size in (input_size, hidden_size, output_size)
+    ):
+        raise ValueError("Invalid network shape.")
     lengths = (
         input_size * hidden_size,
         hidden_size,
         hidden_size * output_size,
         output_size,
     )
-    if any(not isinstance(size, int) or size < 0 for size in (input_size, hidden_size, output_size)):
-        raise ValueError("Invalid network shape.")
     if network_size != sum(lengths) * 4:
         raise ValueError("Corrupt model size.")
     offset = metadata_start + metadata_size
