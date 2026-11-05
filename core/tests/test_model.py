@@ -303,6 +303,31 @@ class ModelFileTests(unittest.TestCase):
         self.assertEqual(engine.get_state()["cycle"], 1)
         self.assertEqual(provider.context[0]["value"], "hello")
 
+    def test_engine_learns_and_persists_action_outcome_self_model(self):
+        engine = self.model_module.AIEngine()
+
+        first = engine.step({"type": "user_input", "value": "hello"})
+        second = engine.step({"type": "user_input", "value": "again"})
+
+        self.assertEqual(first["prediction"]["absoluteError"], 1 / 3)
+        self.assertEqual(second["prediction"]["absoluteError"], 0)
+        self.assertEqual(engine.get_state()["selfModel"]["predictionCount"], 2)
+        self.assertEqual(engine.get_state()["selfModel"]["actions"]["observe"]["count"], 2)
+
+        restored = self.model_module.AIEngine.import_model(engine.export_model())
+        self.assertEqual(
+            restored.get_state()["selfModel"], engine.get_state()["selfModel"]
+        )
+
+    def test_engine_initializes_self_model_for_older_state(self):
+        model = self.model_module.create_model()
+        del model["state"]["selfModel"]
+
+        engine = self.model_module.AIEngine(model)
+
+        self.assertEqual(engine.get_state()["selfModel"]["predictionCount"], 0)
+        self.assertEqual(engine.get_state()["selfModel"]["actions"], {})
+
 
 if __name__ == "__main__":
     unittest.main()

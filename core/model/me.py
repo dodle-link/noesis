@@ -86,6 +86,17 @@ def decode_model_from_storage(encoded):
     return base64.b64decode(encoded, validate=True)
 
 
+def create_initial_self_model():
+    return {
+        "actions": {},
+        "predictionCount": 0,
+        "meanAbsoluteError": 0.0,
+        "lastPrediction": None,
+        "lastOutcome": None,
+        "lastError": 0.0,
+    }
+
+
 def create_initial_state():
     timestamp = now()
     return {
@@ -96,6 +107,7 @@ def create_initial_state():
         "cycle": 0,
         "lastAction": None,
         "lastReward": 0,
+        "selfModel": create_initial_self_model(),
         "createdAt": timestamp,
         "updatedAt": timestamp,
     }
@@ -991,6 +1003,7 @@ class AIEngine:
         self.rules = RuleEngine(self.model["rules"])
         self.behavior = BehaviorEngine(self.model["behavior"])
         self.state = self.model["state"]
+        self.state.setdefault("selfModel", create_initial_self_model())
         self.goals = self.model["goals"]
 
     def encode_input(self, input_value):
@@ -1024,6 +1037,36 @@ class AIEngine:
         if rule:
             return {"type": rule["action"]["type"], "ruleId": rule["id"]}
         return {"type": self.behavior.run(self.state), "ruleId": None}
+
+    def predict_action(self, action):
+        action_model = self.state["selfModel"]["actions"].get(action["type"], {})
+        mean_delta = action_model.get("meanDelta", {})
+        return {
+            key: clamp(self.state[key] + mean_delta.get(key, 0), 0, 100)
+            for key in ("energy", "curiosity", "confidence")
+        }
+
+    def update_self_model(self, action, previous_state, prediction):
+        metrics = ("energy", "curiosity", "confidence")
+        observed = {key: self.state[key] for key in metrics}
+        error = sum(abs(prediction[key] - observed[key]) for key in metrics) / len(metrics)
+        self_model = self.state["selfModel"]
+        action_model = self_model["actions"].setdefault(
+            action["type"], {"count": 0, "meanDelta": {key: 0.0 for key in metrics}}
+        )
+        action_model["count"] += 1
+        for key in metrics:
+            delta = observed[key] - previous_state[key]
+            mean_delta = action_model["meanDelta"]
+            mean_delta[key] += (delta - mean_delta[key]) / action_model["count"]
+
+        self_model["predictionCount"] += 1
+        count = self_model["predictionCount"]
+        self_model["meanAbsoluteError"] += (error - self_model["meanAbsoluteError"]) / count
+        self_model["lastPrediction"] = {"action": action["type"], "state": prediction}
+        self_model["lastOutcome"] = {"action": action["type"], "state": observed}
+        self_model["lastError"] = error
+        return {"predicted": prediction, "observed": observed, "absoluteError": error}
 
     def execute(self, action):
         action_type = action["type"]
@@ -1083,7 +1126,9 @@ class AIEngine:
         perception = self.observe(input_value)
         interpretation = self.interpret(perception)
         action = self.decide(perception)
+        prediction = self.predict_action(action)
         result = self.execute(action)
+        prediction_result = self.update_self_model(action, perception["state"], prediction)
         evaluation = self.evaluate(perception, action, result)
         self.learn(evaluation)
         self.update_state(evaluation)
@@ -1092,6 +1137,7 @@ class AIEngine:
             "perception": perception,
             "interpretation": interpretation,
             "action": action,
+            "prediction": prediction_result,
             "result": result,
             "evaluation": evaluation,
             "state": self.state,
