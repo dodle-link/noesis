@@ -5,6 +5,7 @@ const pixel = document.querySelector(".pixel");
 const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
 const pixelSize = 5;
 const maxVelocity = 3;
+const maxModelSize = 1024 * 1024;
 const state = {
 	x: pixelSize / 2 + Math.random() * Math.max(0, window.innerWidth - pixelSize),
 	y: pixelSize / 2 + Math.random() * Math.max(0, window.innerHeight - pixelSize),
@@ -22,6 +23,9 @@ function readFloatArray(view, offset, length) {
 	const values = new Float32Array(length);
 	for (let index = 0; index < length; index++) {
 		values[index] = view.getFloat32(offset + index * 4, true);
+		if (!Number.isFinite(values[index])) {
+			throw new Error("DODL model contains a non-finite value.");
+		}
 	}
 	return values;
 }
@@ -32,6 +36,9 @@ async function loadPixelModel() {
 		throw new Error(`Model request failed: ${response.status}`);
 	}
 	const buffer = await response.arrayBuffer();
+	if (buffer.byteLength > maxModelSize) {
+		throw new Error("DODL model exceeds the 1 MiB size limit.");
+	}
 	const bytes = new Uint8Array(buffer);
 	if (bytes.byteLength < 16 || String.fromCharCode(...bytes.subarray(0, 4)) !== "DODL") {
 		throw new Error("Invalid DODL model header.");
@@ -49,7 +56,12 @@ async function loadPixelModel() {
 		new TextDecoder().decode(new Uint8Array(buffer, 16, metadataSize)),
 	);
 	const { inputSize, hiddenSize, outputSize } = metadata.networkShape;
-	if (inputSize !== 8 || hiddenSize < 1 || outputSize !== 2) {
+	if (
+		inputSize !== 8 ||
+		!Number.isSafeInteger(hiddenSize) ||
+		hiddenSize < 1 ||
+		outputSize !== 2
+	) {
 		throw new Error("Expected a trained pixel model with 8 inputs and 2 outputs.");
 	}
 	const lengths = [inputSize * hiddenSize, hiddenSize, hiddenSize * outputSize, outputSize];
@@ -167,8 +179,13 @@ function updatePixel(timestamp) {
 	if (pixelModel) {
 		updateModelExcitement(deltaTime);
 		const steering = runPixelModel(pixelModel, createModelInputs());
-		state.velocityX += Math.max(-1, Math.min(1, steering[0])) * 0.16 * deltaTime;
-		state.velocityY += Math.max(-1, Math.min(1, steering[1])) * 0.16 * deltaTime;
+		if (Number.isFinite(steering[0]) && Number.isFinite(steering[1])) {
+			state.velocityX += Math.max(-1, Math.min(1, steering[0])) * 0.16 * deltaTime;
+			state.velocityY += Math.max(-1, Math.min(1, steering[1])) * 0.16 * deltaTime;
+		} else {
+			console.warn("Pixel model produced invalid steering; using built-in steering.");
+			pixelModel = null;
+		}
 	} else {
 		processMouseInteraction(deltaTime);
 	}
