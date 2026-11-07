@@ -234,7 +234,10 @@ class ModelFileTests(unittest.TestCase):
         version, tensor_count, metadata_count = struct.unpack_from("<IQQ", gguf_data, 4)
         self.assertEqual(version, 3)
         self.assertEqual(tensor_count, 4)
-        self.assertEqual(metadata_count, 6)
+        self.assertEqual(metadata_count, 8)
+        self.assertIn(b"noesis.workspace_version", gguf_data)
+        self.assertIn(b"noesis.workspace_format", gguf_data)
+        self.assertIn(b"cycle_snapshot", gguf_data)
         metadata_offset = 24
         first_key_size = struct.unpack_from("<Q", gguf_data, metadata_offset)[0]
         metadata_offset += 8
@@ -322,11 +325,33 @@ class ModelFileTests(unittest.TestCase):
     def test_engine_initializes_self_model_for_older_state(self):
         model = self.model_module.create_model()
         del model["state"]["selfModel"]
+        del model["state"]["workspace"]
 
         engine = self.model_module.AIEngine(model)
 
         self.assertEqual(engine.get_state()["selfModel"]["predictionCount"], 0)
         self.assertEqual(engine.get_state()["selfModel"]["actions"], {})
+        self.assertEqual(engine.get_state()["workspace"]["focus"], "idle")
+
+    def test_engine_broadcasts_cycle_to_persistent_workspace(self):
+        model = self.model_module.create_model()
+        model["state"]["energy"] = 10
+        engine = self.model_module.AIEngine(model)
+
+        result = engine.step({"type": "user_input", "value": "hello"})
+
+        workspace = result["workspace"]
+        self.assertEqual(workspace["cycle"], 1)
+        self.assertEqual(workspace["focus"], "user_input")
+        self.assertEqual(workspace["goal"], "survive")
+        self.assertEqual(workspace["intention"], "rest")
+        self.assertEqual(workspace["outcome"]["energy"], 20)
+        self.assertEqual(
+            workspace["predictionError"], result["prediction"]["absoluteError"]
+        )
+
+        restored = self.model_module.AIEngine.import_model(engine.export_model())
+        self.assertEqual(restored.get_state()["workspace"], workspace)
 
 
 if __name__ == "__main__":

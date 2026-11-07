@@ -97,6 +97,18 @@ def create_initial_self_model():
     }
 
 
+def create_initial_workspace():
+    return {
+        "cycle": 0,
+        "focus": "idle",
+        "goal": None,
+        "intention": None,
+        "prediction": None,
+        "outcome": None,
+        "predictionError": 0.0,
+    }
+
+
 def create_initial_state():
     timestamp = now()
     return {
@@ -108,6 +120,7 @@ def create_initial_state():
         "lastAction": None,
         "lastReward": 0,
         "selfModel": create_initial_self_model(),
+        "workspace": create_initial_workspace(),
         "createdAt": timestamp,
         "updatedAt": timestamp,
     }
@@ -774,6 +787,8 @@ def serialize_gguf_model(model):
         ("noesis.input_size", 4, network["inputSize"]),
         ("noesis.hidden_size", 4, network["hiddenSize"]),
         ("noesis.output_size", 4, network["outputSize"]),
+        ("noesis.workspace_version", 4, 1),
+        ("noesis.workspace_format", 8, "cycle_snapshot"),
     )
     metadata_bytes = bytearray()
     for key, value_type, value in metadata:
@@ -1004,6 +1019,7 @@ class AIEngine:
         self.behavior = BehaviorEngine(self.model["behavior"])
         self.state = self.model["state"]
         self.state.setdefault("selfModel", create_initial_self_model())
+        self.workspace = self.state.setdefault("workspace", create_initial_workspace())
         self.goals = self.model["goals"]
 
     def encode_input(self, input_value):
@@ -1031,6 +1047,37 @@ class AIEngine:
 
     def interpret(self, perception):
         return self.network.forward(self.encode_input(perception["input"]))
+
+    def open_workspace(self, perception):
+        input_value = perception["input"]
+        focus = input_value.get("type", "input") if isinstance(input_value, dict) else "input"
+        salient_goal = None
+        highest_score = 0
+        for goal in self.goals:
+            target = goal.get("target", {})
+            deficit = max(
+                (
+                    value - self.state.get(key[:-3] if key.endswith("Min") else key, value)
+                    for key, value in target.items()
+                    if isinstance(value, (int, float))
+                ),
+                default=0,
+            )
+            score = goal.get("priority", 0) * clamp(deficit / 100, 0, 1)
+            if score > highest_score:
+                highest_score = score
+                salient_goal = goal.get("id")
+        self.workspace = {
+            "cycle": self.state["cycle"] + 1,
+            "focus": focus,
+            "goal": salient_goal,
+            "intention": None,
+            "prediction": None,
+            "outcome": None,
+            "predictionError": 0.0,
+        }
+        self.state["workspace"] = self.workspace
+        return self.workspace
 
     def decide(self, perception):
         rule = self.rules.select(self.state)
@@ -1125,10 +1172,15 @@ class AIEngine:
     def step(self, input_value):
         perception = self.observe(input_value)
         interpretation = self.interpret(perception)
+        workspace = self.open_workspace(perception)
         action = self.decide(perception)
         prediction = self.predict_action(action)
+        workspace["intention"] = action["type"]
+        workspace["prediction"] = prediction
         result = self.execute(action)
         prediction_result = self.update_self_model(action, perception["state"], prediction)
+        workspace["outcome"] = prediction_result["observed"]
+        workspace["predictionError"] = prediction_result["absoluteError"]
         evaluation = self.evaluate(perception, action, result)
         self.learn(evaluation)
         self.update_state(evaluation)
@@ -1138,6 +1190,7 @@ class AIEngine:
             "interpretation": interpretation,
             "action": action,
             "prediction": prediction_result,
+            "workspace": dict(workspace),
             "result": result,
             "evaluation": evaluation,
             "state": self.state,

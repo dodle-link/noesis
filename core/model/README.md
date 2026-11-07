@@ -11,6 +11,8 @@ tags:
 
 The engine selects actions from enabled rules, falling back to its behavior program. The neural network's output is included in each step's interpretation, but it does not currently select the action.
 
+Each engine cycle also updates a persisted workspace snapshot with the current input focus, most salient unmet goal, selected intention, predicted state, observed outcome, and prediction error. This provides a functional self-monitoring trace; it is not evidence that the model has subjective experience.
+
 Live Preview: [noesis.dodle.link/model](https://noesis.dodle.link/model/)
 
 ## Create a model file
@@ -22,7 +24,7 @@ cd core/model
 python3 me.py
 ```
 
-This creates `noe-model.dodl` and `noe-model.F32.gguf` in the current directory. The `F32` suffix identifies the GGUF file's float32 tensor type. The DODL file stores the complete model, including its state, memory, rules, behavior, and network. The GGUF file contains the network's four float32 tensors and architecture dimensions; it uses the custom `noesis` architecture and requires a compatible runtime to execute.
+This creates `noe-model.dodl` and `noe-model.F32.gguf` in the current directory. The `F32` suffix identifies the GGUF file's float32 tensor type. The DODL file stores the complete model, including its state, memory, rules, behavior, and network. The GGUF file contains the network's four float32 tensors, architecture dimensions, and workspace format/version markers; it uses the custom `noesis` architecture and requires a compatible runtime to execute. The live workspace state remains in DODL.
 
 `create_model_file(path)` is also available when creating a model from Python; it writes the binary DODL format and returns the model object. Pass that model to `create_gguf_model_file(path, model)` to write the matching GGUF file.
 
