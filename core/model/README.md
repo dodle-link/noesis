@@ -15,6 +15,8 @@ Each engine cycle also updates a persisted workspace snapshot with the current i
 
 The workspace keeps external input distinct from internal state and broadcasts both alongside the active goal, chosen intention, prediction, and outcome. When no higher-priority rule applies, an active `learn` goal can guide the action instead of the default `observe`. This is a small, testable implementation of an integrated-workspace/self-model hypothesis; it does not simulate quantum effects or establish consciousness.
 
+The engine also maintains bounded `bioSignals` (`novelty`, `stress`, `recovery`, and derived `arousal`) as software-only regulatory variables. Inputs and actions update these signals; novelty and recovery can enable workspace-guided exploration or learning, while high stress suppresses those effortful actions. They are biological analogies, not modeled chemical concentrations or literal biocomputation.
+
 Live Preview: [noesis.dodle.link/model](https://noesis.dodle.link/model/)
 
 ## Create a model file

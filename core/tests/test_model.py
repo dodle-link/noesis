@@ -351,6 +351,7 @@ class ModelFileTests(unittest.TestCase):
         self.assertEqual(engine.get_state()["selfModel"]["predictionCount"], 0)
         self.assertEqual(engine.get_state()["selfModel"]["actions"], {})
         self.assertEqual(engine.get_state()["workspace"]["focus"], "idle")
+        self.assertEqual(engine.get_state()["bioSignals"]["recovery"], 0.5)
 
     def test_engine_broadcasts_cycle_to_persistent_workspace(self):
         model = self.model_module.create_model()
@@ -366,12 +367,14 @@ class ModelFileTests(unittest.TestCase):
         self.assertEqual(workspace["intention"], "rest")
         self.assertEqual(workspace["externalInput"], {"type": "user_input", "value": "hello"})
         self.assertEqual(workspace["internalState"]["energy"], 10)
+        self.assertIn("bioSignals", workspace["internalState"])
         self.assertEqual(workspace["outcome"]["energy"], 20)
         self.assertEqual(
             workspace["predictionError"], result["prediction"]["absoluteError"]
         )
         self.assertEqual(workspace["broadcast"]["goal"], "survive")
         self.assertEqual(workspace["broadcast"]["intention"], "rest")
+        self.assertEqual(workspace["broadcast"]["bioSignals"], engine.get_state()["bioSignals"])
 
         restored = self.model_module.AIEngine.import_model(engine.export_model())
         self.assertEqual(restored.get_state()["workspace"], workspace)
@@ -389,6 +392,41 @@ class ModelFileTests(unittest.TestCase):
         self.assertEqual(result["workspace"]["goal"], "learn")
         self.assertEqual(result["action"]["type"], "learn")
         self.assertEqual(result["workspace"]["broadcast"]["outcome"]["confidence"], 25)
+
+    def test_bio_signals_gate_goal_actions_and_remain_bounded(self):
+        model = self.model_module.create_model()
+        model["state"]["curiosity"] = 0
+        model["state"]["bioSignals"]["novelty"] = 0.5
+        model["goals"] = [
+            {"id": "explore", "priority": 50, "target": {"curiosityMin": 60}}
+        ]
+        engine = self.model_module.AIEngine(model)
+
+        result = engine.step({"type": "user_input", "value": "new input"})
+
+        self.assertEqual(result["workspace"]["goal"], "explore")
+        self.assertEqual(result["action"]["type"], "explore")
+        for _ in range(20):
+            engine.step({"type": "user_input", "value": "more input"})
+
+        signals = engine.get_state()["bioSignals"]
+        self.assertTrue(all(0 <= value <= 1 for value in signals.values()))
+        restored = self.model_module.AIEngine.import_model(engine.export_model())
+        self.assertEqual(restored.get_state()["bioSignals"], signals)
+
+    def test_high_stress_suppresses_workspace_guided_exploration(self):
+        model = self.model_module.create_model()
+        model["state"]["curiosity"] = 0
+        model["state"]["bioSignals"]["stress"] = 0.95
+        model["goals"] = [
+            {"id": "explore", "priority": 50, "target": {"curiosityMin": 60}}
+        ]
+        engine = self.model_module.AIEngine(model)
+
+        result = engine.step({"type": "user_input", "value": "new input"})
+
+        self.assertEqual(result["workspace"]["goal"], "explore")
+        self.assertEqual(result["action"]["type"], "observe")
 
 
 if __name__ == "__main__":

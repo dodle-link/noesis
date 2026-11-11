@@ -97,6 +97,10 @@ def create_initial_self_model():
     }
 
 
+def create_initial_bio_signals():
+    return {"novelty": 0.0, "stress": 0.1, "recovery": 0.5, "arousal": 0.05}
+
+
 def create_initial_workspace():
     return {
         "cycle": 0,
@@ -122,6 +126,7 @@ def create_initial_state():
         "cycle": 0,
         "lastAction": None,
         "lastReward": 0,
+        "bioSignals": create_initial_bio_signals(),
         "selfModel": create_initial_self_model(),
         "workspace": create_initial_workspace(),
         "createdAt": timestamp,
@@ -1023,6 +1028,9 @@ class AIEngine:
         self.rules = RuleEngine(self.model["rules"])
         self.behavior = BehaviorEngine(self.model["behavior"])
         self.state = self.model["state"]
+        bio_signals = self.state.setdefault("bioSignals", create_initial_bio_signals())
+        for key, value in create_initial_bio_signals().items():
+            bio_signals.setdefault(key, value)
         self.state.setdefault("selfModel", create_initial_self_model())
         self.workspace = self.state.setdefault("workspace", create_initial_workspace())
         self.goals = self.model["goals"]
@@ -1052,6 +1060,44 @@ class AIEngine:
 
     def interpret(self, perception):
         return self.network.forward(self.encode_input(perception["input"]))
+
+    def sense_bio_signals(self, input_value):
+        signals = self.state["bioSignals"]
+        input_type = input_value.get("type") if isinstance(input_value, dict) else None
+        signals["novelty"] = clamp(
+            signals["novelty"] * 0.8 + (0.3 if input_type == "user_input" else 0.05),
+            0,
+            1,
+        )
+        signals["stress"] = clamp(
+            signals["stress"] * 0.9 + (0.15 if self.state["energy"] < 20 else 0),
+            0,
+            1,
+        )
+        signals["recovery"] = clamp(
+            signals["recovery"] * 0.9 + (0.1 if self.state["energy"] >= 50 else 0),
+            0,
+            1,
+        )
+        signals["arousal"] = clamp(
+            signals["novelty"] * 0.6 + signals["stress"] * 0.4, 0, 1
+        )
+
+    def apply_action_to_bio_signals(self, action):
+        signals = self.state["bioSignals"]
+        if action["type"] == "rest":
+            changes = {"stress": -0.15, "recovery": 0.2, "novelty": -0.1}
+        elif action["type"] == "explore":
+            changes = {"stress": 0.1, "recovery": -0.1, "novelty": 0.15}
+        elif action["type"] == "learn":
+            changes = {"stress": 0.03, "recovery": -0.05, "novelty": -0.05}
+        else:
+            changes = {"stress": 0, "recovery": 0, "novelty": -0.02}
+        for key, change in changes.items():
+            signals[key] = clamp(signals[key] + change, 0, 1)
+        signals["arousal"] = clamp(
+            signals["novelty"] * 0.6 + signals["stress"] * 0.4, 0, 1
+        )
 
     def open_workspace(self, perception):
         input_value = perception["input"]
@@ -1092,12 +1138,13 @@ class AIEngine:
 
     def decide(self, perception, workspace=None):
         rule = self.rules.select(self.state)
-        if (
-            workspace
-            and workspace.get("goal") == "learn"
-            and (rule is None or rule["action"]["type"] == "observe")
-        ):
-            return {"type": "learn", "ruleId": None}
+        default_action = rule is None or rule["action"]["type"] == "observe"
+        signals = self.state["bioSignals"]
+        if workspace and default_action and signals["stress"] < 0.75 and signals["recovery"] > 0.1:
+            if workspace.get("goal") == "learn":
+                return {"type": "learn", "ruleId": None}
+            if workspace.get("goal") == "explore" and signals["novelty"] >= 0.7:
+                return {"type": "explore", "ruleId": None}
         if rule:
             return {"type": rule["action"]["type"], "ruleId": rule["id"]}
         return {"type": self.behavior.run(self.state), "ruleId": None}
@@ -1188,13 +1235,16 @@ class AIEngine:
 
     def step(self, input_value):
         perception = self.observe(input_value)
+        self.sense_bio_signals(input_value)
         interpretation = self.interpret(perception)
         workspace = self.open_workspace(perception)
+        workspace["internalState"]["bioSignals"] = copy.deepcopy(self.state["bioSignals"])
         action = self.decide(perception, workspace)
         prediction = self.predict_action(action)
         workspace["intention"] = action["type"]
         workspace["prediction"] = prediction
         result = self.execute(action)
+        self.apply_action_to_bio_signals(action)
         prediction_result = self.update_self_model(action, perception["state"], prediction)
         workspace["outcome"] = prediction_result["observed"]
         workspace["predictionError"] = prediction_result["absoluteError"]
@@ -1206,6 +1256,7 @@ class AIEngine:
             "prediction": workspace["prediction"],
             "outcome": workspace["outcome"],
             "predictionError": workspace["predictionError"],
+            "bioSignals": copy.deepcopy(self.state["bioSignals"]),
         }
         evaluation = self.evaluate(perception, action, result)
         self.learn(evaluation)
