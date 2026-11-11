@@ -6,6 +6,7 @@ const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
 const pixelSize = 5;
 const maxVelocity = 3;
 const maxModelSize = 1024 * 1024;
+const maxPixelHiddenSize = 128;
 const state = {
 	x: pixelSize / 2 + Math.random() * Math.max(0, window.innerWidth - pixelSize),
 	y: pixelSize / 2 + Math.random() * Math.max(0, window.innerHeight - pixelSize),
@@ -60,9 +61,10 @@ async function loadPixelModel() {
 		inputSize !== 8 ||
 		!Number.isSafeInteger(hiddenSize) ||
 		hiddenSize < 1 ||
+		hiddenSize > maxPixelHiddenSize ||
 		outputSize !== 2
 	) {
-		throw new Error("Expected a trained pixel model with 8 inputs and 2 outputs.");
+		throw new Error("Expected a pixel model with 8 inputs, 2 outputs, and at most 128 hidden units.");
 	}
 	const lengths = [inputSize * hiddenSize, hiddenSize, hiddenSize * outputSize, outputSize];
 	if (networkSize !== lengths.reduce((total, length) => total + length * 4, 0)) {
@@ -75,12 +77,22 @@ async function loadPixelModel() {
 		offset += length * 4;
 		return values;
 	});
-	return { inputSize, hiddenSize, outputSize, weights1: arrays[0], bias1: arrays[1], weights2: arrays[2], bias2: arrays[3] };
+	return {
+		inputSize,
+		hiddenSize,
+		outputSize,
+		weights1: arrays[0],
+		bias1: arrays[1],
+		weights2: arrays[2],
+		bias2: arrays[3],
+		hiddenScratch: new Float32Array(hiddenSize),
+		outputScratch: new Float32Array(outputSize),
+	};
 }
 
 function runPixelModel(model, inputs) {
-	const hidden = new Float32Array(model.hiddenSize);
-	const outputs = new Float32Array(model.outputSize);
+	const hidden = model.hiddenScratch;
+	const outputs = model.outputScratch;
 	for (let hiddenIndex = 0; hiddenIndex < model.hiddenSize; hiddenIndex++) {
 		let total = model.bias1[hiddenIndex];
 		const start = hiddenIndex * model.inputSize;
@@ -101,15 +113,16 @@ function runPixelModel(model, inputs) {
 }
 
 function createModelInputs() {
-	const maxDimension = Math.max(1, window.innerWidth, window.innerHeight);
+	const width = Math.max(1, window.innerWidth);
+	const height = Math.max(1, window.innerHeight);
 	const hasPointer = state.mouseX >= 0 && state.mouseY >= 0;
 	return [
-		state.x / Math.max(1, window.innerWidth),
-		state.y / Math.max(1, window.innerHeight),
+		state.x / width,
+		state.y / height,
 		state.velocityX / maxVelocity,
 		state.velocityY / maxVelocity,
-		hasPointer ? (state.mouseX - state.x) / maxDimension : 0,
-		hasPointer ? (state.mouseY - state.y) / maxDimension : 0,
+		hasPointer ? (state.mouseX - state.x) / width : 0,
+		hasPointer ? ((state.mouseY - state.y) / height) * 0.7 : 0,
 		hasPointer ? 1 : 0,
 		state.excitementLevel,
 	];
