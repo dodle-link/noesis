@@ -369,8 +369,10 @@ class MemoryStore:
 
     def limit(self):
         while len(self.items) > CONFIG["MEMORY_LIMIT"]:
-            self.items.sort(key=lambda item: item["importance"])
-            self.items.pop(0)
+            least_important = min(
+                range(len(self.items)), key=lambda index: self.items[index]["importance"]
+            )
+            self.items.pop(least_important)
 
     def get_recent(self, count=10):
         return self.items[-count:]

@@ -46,6 +46,25 @@ class ModelFileTests(unittest.TestCase):
         self.assertAlmostEqual(network.weights2[0], 1.8)
         self.assertAlmostEqual(network.weights1[0], 0.6)
 
+    def test_memory_limit_evicts_low_importance_without_reordering_recent_items(self):
+        memory = self.model_module.MemoryStore()
+        with patch.dict(self.model_module.CONFIG, {"MEMORY_LIMIT": 3}):
+            for action, importance in (
+                ("old-low", 1),
+                ("old-high", 100),
+                ("middle", 50),
+                ("latest", 10),
+            ):
+                memory.add({"action": action, "importance": importance})
+
+        self.assertEqual(
+            [item["action"] for item in memory.get_recent(10)],
+            ["old-high", "middle", "latest"],
+        )
+        self.assertEqual(
+            [item["action"] for item in memory.get_recent(2)], ["middle", "latest"]
+        )
+
     def test_behavior_engine_respects_outer_branch_around_nested_if(self):
         program = [
             ["READ", "energy"],
