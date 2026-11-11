@@ -101,11 +101,14 @@ def create_initial_workspace():
     return {
         "cycle": 0,
         "focus": "idle",
+        "externalInput": None,
+        "internalState": {},
         "goal": None,
         "intention": None,
         "prediction": None,
         "outcome": None,
         "predictionError": 0.0,
+        "broadcast": {},
     }
 
 
@@ -1072,17 +1075,29 @@ class AIEngine:
         self.workspace = {
             "cycle": self.state["cycle"] + 1,
             "focus": focus,
+            "externalInput": copy.deepcopy(input_value),
+            "internalState": {
+                key: self.state[key]
+                for key in ("energy", "curiosity", "confidence", "stability")
+            },
             "goal": salient_goal,
             "intention": None,
             "prediction": None,
             "outcome": None,
             "predictionError": 0.0,
+            "broadcast": {},
         }
         self.state["workspace"] = self.workspace
         return self.workspace
 
-    def decide(self, perception):
+    def decide(self, perception, workspace=None):
         rule = self.rules.select(self.state)
+        if (
+            workspace
+            and workspace.get("goal") == "learn"
+            and (rule is None or rule["action"]["type"] == "observe")
+        ):
+            return {"type": "learn", "ruleId": None}
         if rule:
             return {"type": rule["action"]["type"], "ruleId": rule["id"]}
         return {"type": self.behavior.run(self.state), "ruleId": None}
@@ -1175,7 +1190,7 @@ class AIEngine:
         perception = self.observe(input_value)
         interpretation = self.interpret(perception)
         workspace = self.open_workspace(perception)
-        action = self.decide(perception)
+        action = self.decide(perception, workspace)
         prediction = self.predict_action(action)
         workspace["intention"] = action["type"]
         workspace["prediction"] = prediction
@@ -1183,6 +1198,15 @@ class AIEngine:
         prediction_result = self.update_self_model(action, perception["state"], prediction)
         workspace["outcome"] = prediction_result["observed"]
         workspace["predictionError"] = prediction_result["absoluteError"]
+        workspace["broadcast"] = {
+            "externalInput": workspace["externalInput"],
+            "internalState": workspace["internalState"],
+            "goal": workspace["goal"],
+            "intention": workspace["intention"],
+            "prediction": workspace["prediction"],
+            "outcome": workspace["outcome"],
+            "predictionError": workspace["predictionError"],
+        }
         evaluation = self.evaluate(perception, action, result)
         self.learn(evaluation)
         self.update_state(evaluation)

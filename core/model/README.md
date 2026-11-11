@@ -13,6 +13,8 @@ The engine selects actions from enabled rules, falling back to its behavior prog
 
 Each engine cycle also updates a persisted workspace snapshot with the current input focus, most salient unmet goal, selected intention, predicted state, observed outcome, and prediction error. This provides a functional self-monitoring trace; it is not evidence that the model has subjective experience.
 
+The workspace keeps external input distinct from internal state and broadcasts both alongside the active goal, chosen intention, prediction, and outcome. When no higher-priority rule applies, an active `learn` goal can guide the action instead of the default `observe`. This is a small, testable implementation of an integrated-workspace/self-model hypothesis; it does not simulate quantum effects or establish consciousness.
+
 Live Preview: [noesis.dodle.link/model](https://noesis.dodle.link/model/)
 
 ## Create a model file

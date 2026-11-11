@@ -364,13 +364,31 @@ class ModelFileTests(unittest.TestCase):
         self.assertEqual(workspace["focus"], "user_input")
         self.assertEqual(workspace["goal"], "survive")
         self.assertEqual(workspace["intention"], "rest")
+        self.assertEqual(workspace["externalInput"], {"type": "user_input", "value": "hello"})
+        self.assertEqual(workspace["internalState"]["energy"], 10)
         self.assertEqual(workspace["outcome"]["energy"], 20)
         self.assertEqual(
             workspace["predictionError"], result["prediction"]["absoluteError"]
         )
+        self.assertEqual(workspace["broadcast"]["goal"], "survive")
+        self.assertEqual(workspace["broadcast"]["intention"], "rest")
 
         restored = self.model_module.AIEngine.import_model(engine.export_model())
         self.assertEqual(restored.get_state()["workspace"], workspace)
+
+    def test_workspace_goal_guides_learning_when_rules_only_observe(self):
+        model = self.model_module.create_model()
+        model["state"]["confidence"] = 20
+        model["goals"] = [
+            {"id": "learn", "priority": 40, "target": {"confidenceMin": 50}}
+        ]
+        engine = self.model_module.AIEngine(model)
+
+        result = engine.step({"type": "user_input", "value": "learn"})
+
+        self.assertEqual(result["workspace"]["goal"], "learn")
+        self.assertEqual(result["action"]["type"], "learn")
+        self.assertEqual(result["workspace"]["broadcast"]["outcome"]["confidence"], 25)
 
 
 if __name__ == "__main__":
