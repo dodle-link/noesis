@@ -90,9 +90,9 @@ with open("merged-model.dodl", "wb") as model_file:
 
 ONNX loading requires `pip install onnx` and supports a graph consisting of `Gemm → Relu → Gemm` with weights and biases stored as initializers. The imported ONNX dimensions are preserved in the merged DODL model. This merges weights and biases only; it does not combine memories, rules, or other model metadata. Direct parameter averaging may work poorly for independently trained networks, even when their shapes match.
 
-## Generate a reply with OpenAI or Gemini
+## Generate a reply with an external model
 
-`LLMProvider` sends the input, current state, and up to five recent memories to OpenAI or Gemini. It uses Python's standard library, so no provider SDK is required. Set the provider and its API key in the environment; credentials are never stored in the DODL file:
+`LLMProvider` sends the input, current state, and up to five recent memories to OpenAI, Gemini, or an OpenAI-compatible endpoint. It uses Python's standard library, so no provider SDK is required. Credentials and endpoint configuration are runtime-only and are never stored in the DODL file:
 
 ```bash
 export NOESIS_PROVIDER=openai  # or gemini
@@ -100,6 +100,16 @@ export OPENAI_API_KEY=your-api-key
 ```
 
 For Gemini, set `GEMINI_API_KEY` instead. `NOESIS_PROVIDER` defaults to `openai`. The default models are `gpt-4o-mini` and `gemini-2.0-flash`; override them with `OPENAI_MODEL` or `GEMINI_MODEL` if needed.
+
+For a local server with an OpenAI-compatible API, such as Ollama or vLLM, configure:
+
+```bash
+export NOESIS_PROVIDER=openai-compatible
+export NOESIS_BASE_URL=http://localhost:11434/v1
+export NOESIS_MODEL=llama3.2
+```
+
+`NOESIS_API_KEY` is optional for local servers and can be set when the endpoint requires a key. Pass `base_url` directly to `LLMProvider` to override the environment setting.
 
 ```python
 from model.me import AIEngine, LLMProvider
@@ -115,7 +125,7 @@ with open("noe-model.dodl", "wb") as model_file:
     model_file.write(engine.export_model())
 ```
 
-`respond()` asks the provider for a text reply, then runs one normal local engine step and returns its result with a `reply` field. The provider generates the conversational reply; it does not choose the engine's action. Provider configuration is runtime-only and does not change the DODL format. `LLMProviderError` is raised for provider request or response errors.
+`respond()` asks the provider for a reply and structured analysis, then runs one local engine step. The analysis is bounded and stored in the workspace as `providerAnalysis`, where it is included in the cycle broadcast. Providers that only implement the older `generate()` method remain supported and produce no analysis. The provider does not choose the engine's action; local rules and behavior remain in control. This self-monitoring architecture is not evidence of subjective experience. `LLMProviderError` is raised for provider request or response errors.
 
 ## Model format and limits
 
@@ -134,7 +144,7 @@ The file starts with the `DODL` magic signature and a versioned header. It store
 - `merge_models(model_a, model_b, alpha=0.5)` blends compatible models' network parameters.
 - `AIEngine(model=None)` runs and updates a model; without an argument it creates a fresh one.
 - `AIEngine.step(input_value)` observes input, chooses and executes an action, evaluates it, learns, updates state, and returns the cycle result.
-- `LLMProvider(provider=None)` configures an OpenAI or Gemini text-generation adapter from environment variables.
+- `LLMProvider(provider=None)` configures an OpenAI, Gemini, or OpenAI-compatible text-generation adapter from environment variables.
 - `AIEngine.respond(input_value, provider=None)` generates a provider reply and runs one local engine step.
 - `AIEngine.export_model()` serializes the engine's current model.
 

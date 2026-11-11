@@ -310,6 +310,50 @@ class ModelFileTests(unittest.TestCase):
         self.assertIn(":generateContent", request.full_url)
         self.assertEqual(json.loads(request.data)["contents"][0]["role"], "user")
 
+    def test_openai_compatible_provider_supports_local_endpoint_without_key(self):
+        response = io.BytesIO(
+            json.dumps({"choices": [{"message": {"content": "Hello locally"}}]}).encode()
+        )
+        provider = self.model_module.LLMProvider(
+            "openai-compatible",
+            model="qwen2.5",
+            base_url="http://localhost:11434/v1/",
+        )
+
+        with patch("urllib.request.urlopen", return_value=response) as urlopen:
+            reply = provider.generate("hello", {"energy": 72}, [])
+
+        self.assertEqual(reply, "Hello locally")
+        request = urlopen.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "http://localhost:11434/v1/chat/completions",
+        )
+        self.assertNotIn("Authorization", request.headers)
+
+    def test_provider_can_return_structured_analysis(self):
+        generated = {
+            "reply": "Hello from a local model",
+            "analysis": {
+                "observations": ["The user greeted the assistant."],
+                "hypothesis": "A greeting is appropriate.",
+                "confidence": 0.8,
+            },
+        }
+        response = io.BytesIO(
+            json.dumps(
+                {"choices": [{"message": {"content": json.dumps(generated)}}]}
+            ).encode()
+        )
+        provider = self.model_module.LLMProvider(
+            "openai-compatible", base_url="http://localhost:11434/v1"
+        )
+
+        with patch("urllib.request.urlopen", return_value=response):
+            result = provider.generate_with_analysis("hello", {}, [])
+
+        self.assertEqual(result, generated)
+
     def test_engine_respond_generates_reply_and_runs_local_step(self):
         class FakeProvider:
             def generate(self, user_input, state, memories):
@@ -324,6 +368,25 @@ class ModelFileTests(unittest.TestCase):
         self.assertEqual(result["reply"], "Hello from provider")
         self.assertEqual(engine.get_state()["cycle"], 1)
         self.assertEqual(provider.context[0]["value"], "hello")
+
+    def test_engine_broadcasts_provider_analysis_without_using_it_as_action(self):
+        analysis = {
+            "observations": ["The user greeted the assistant."],
+            "hypothesis": "A greeting is appropriate.",
+            "confidence": 0.8,
+        }
+
+        class FakeProvider:
+            def generate_with_analysis(self, user_input, state, memories):
+                return {"reply": "Hello", "analysis": analysis}
+
+        engine = self.model_module.AIEngine(provider=FakeProvider())
+        result = engine.respond({"type": "user_input", "value": "hello"})
+
+        self.assertEqual(result["reply"], "Hello")
+        self.assertEqual(result["action"]["type"], "observe")
+        self.assertEqual(result["workspace"]["providerAnalysis"], analysis)
+        self.assertEqual(result["workspace"]["broadcast"]["providerAnalysis"], analysis)
 
     def test_engine_learns_and_persists_action_outcome_self_model(self):
         engine = self.model_module.AIEngine()
