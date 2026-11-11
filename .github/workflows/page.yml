@@ -5,6 +5,7 @@ on:
     branches: [ "main" ]
     paths:
       - "noe-ui/**"
+      - "core/model/**"
   workflow_dispatch:
 
 permissions:
