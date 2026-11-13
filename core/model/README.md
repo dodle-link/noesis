@@ -16,7 +16,6 @@ This guide starts with the basics, then covers training, model files, and option
 Create the default model files from this directory:
 
 ```bash
-cd core/model
 python3 me.py
 ```
 
@@ -48,7 +47,6 @@ Live Preview: [noesis.dodle.link/model](https://noesis.dodle.link/model/)
 Run the script from the `core/model/` directory:
 
 ```bash
-cd core/model
 python3 me.py
 ```
 
