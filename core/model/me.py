@@ -950,6 +950,11 @@ class BiocomputationProvider:
     def compute(self, task):
         if not isinstance(task, dict):
             raise ValueError("Biocomputation task must be a JSON object.")
+        operation = task.get("operation")
+        if not isinstance(operation, str) or not operation.strip():
+            raise ValueError("Biocomputation task must include a non-empty operation.")
+        if "inputs" in task and not isinstance(task["inputs"], dict):
+            raise ValueError("Biocomputation task inputs must be a JSON object.")
         try:
             payload = json.dumps(
                 {"protocol": self.PROTOCOL, "task": task},
@@ -995,6 +1000,11 @@ class BiocomputationProvider:
             raise BiocomputationProviderError(
                 f"Biocomputation response must include protocol '{self.PROTOCOL}' and a result."
             )
+        for field in ("provider", "run_id"):
+            if field in result and not isinstance(result[field], str):
+                raise BiocomputationProviderError(
+                    f"Biocomputation response field '{field}' must be a string."
+                )
         return result
 
 

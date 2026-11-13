@@ -162,7 +162,7 @@ The provider sends a JSON `POST` request in this format:
 }
 ```
 
-The service must return JSON with the same `protocol` and a `result` field. It can also include `provider` and `run_id` to identify the service and run. Set `NOESIS_BIOCOMPUTE_URL` and, if needed, `NOESIS_BIOCOMPUTE_API_KEY`. Remote endpoints must use HTTPS; HTTP is allowed for localhost development. The API key is sent as a bearer token and is never saved in the model file.
+`operation` must be a non-empty string, and `inputs`, when provided, must be an object. The service must return JSON with the same `protocol` and a `result` field. It can also include string-valued `provider` and `run_id` fields to identify the service and run. Set `NOESIS_BIOCOMPUTE_URL` and, if needed, `NOESIS_BIOCOMPUTE_API_KEY`. Remote endpoints must use HTTPS; HTTP is allowed for localhost development. The API key is sent as a bearer token and is never saved in the model file.
 
 ```python
 from me import AIEngine, BiocomputationProvider

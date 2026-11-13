@@ -363,6 +363,39 @@ class ModelFileTests(unittest.TestCase):
             ):
                 provider.compute({"operation": "example"})
 
+    def test_biocomputation_provider_validates_task_shape(self):
+        provider = self.model_module.BiocomputationProvider(
+            "https://bio.example.test/compute"
+        )
+
+        for task, message in (
+            ({"operation": " "}, "non-empty operation"),
+            ({"operation": "example", "inputs": []}, "inputs must be a JSON object"),
+        ):
+            with self.subTest(task=task), self.assertRaisesRegex(ValueError, message):
+                provider.compute(task)
+
+    def test_biocomputation_provider_validates_response_metadata(self):
+        response = io.BytesIO(
+            json.dumps(
+                {
+                    "protocol": "noesis-biocompute/v1",
+                    "result": True,
+                    "run_id": 123,
+                }
+            ).encode()
+        )
+        provider = self.model_module.BiocomputationProvider(
+            "https://bio.example.test/compute"
+        )
+
+        with patch("urllib.request.urlopen", return_value=response):
+            with self.assertRaisesRegex(
+                self.model_module.BiocomputationProviderError,
+                "run_id.*must be a string",
+            ):
+                provider.compute({"operation": "example"})
+
     def test_engine_submits_biocomputation_task_without_mutating_model(self):
         class FakeProvider:
             def compute(self, task):
