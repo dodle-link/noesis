@@ -922,6 +922,82 @@ class LLMProviderError(RuntimeError):
     pass
 
 
+class BiocomputationProviderError(RuntimeError):
+    pass
+
+
+class BiocomputationProvider:
+    """Client for a remote biological-computation service implementing Noesis' JSON contract."""
+
+    PROTOCOL = "noesis-biocompute/v1"
+    MAX_PAYLOAD_SIZE = 1024 * 1024
+
+    def __init__(self, endpoint=None, api_key=None, timeout=30):
+        self.endpoint = endpoint or os.environ.get("NOESIS_BIOCOMPUTE_URL")
+        if not self.endpoint:
+            raise ValueError("Set NOESIS_BIOCOMPUTE_URL or pass endpoint.")
+        parsed_endpoint = urllib.parse.urlparse(self.endpoint)
+        local_hosts = {"localhost", "127.0.0.1", "::1"}
+        if parsed_endpoint.scheme != "https" and not (
+            parsed_endpoint.scheme == "http" and parsed_endpoint.hostname in local_hosts
+        ):
+            raise ValueError("Biocomputation endpoint must use HTTPS (HTTP is allowed for localhost).")
+        if not parsed_endpoint.hostname:
+            raise ValueError("Biocomputation endpoint must include a hostname.")
+        self.api_key = api_key or os.environ.get("NOESIS_BIOCOMPUTE_API_KEY")
+        self.timeout = timeout
+
+    def compute(self, task):
+        if not isinstance(task, dict):
+            raise ValueError("Biocomputation task must be a JSON object.")
+        try:
+            payload = json.dumps(
+                {"protocol": self.PROTOCOL, "task": task},
+                ensure_ascii=False,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+        except (TypeError, ValueError) as error:
+            raise ValueError("Biocomputation task must contain finite JSON values.") from error
+        if len(payload) > self.MAX_PAYLOAD_SIZE:
+            raise ValueError("Biocomputation task exceeds the 1 MiB payload limit.")
+
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        request = urllib.request.Request(
+            self.endpoint, data=payload, headers=headers, method="POST"
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                response_data = response.read(self.MAX_PAYLOAD_SIZE + 1)
+        except urllib.error.HTTPError as error:
+            raise BiocomputationProviderError(
+                f"Biocomputation service returned HTTP {error.code}."
+            ) from error
+        except (urllib.error.URLError, TimeoutError) as error:
+            raise BiocomputationProviderError(
+                f"Biocomputation service request failed: {error}."
+            ) from error
+        if len(response_data) > self.MAX_PAYLOAD_SIZE:
+            raise BiocomputationProviderError("Biocomputation response exceeds the 1 MiB limit.")
+        try:
+            result = json.loads(response_data.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise BiocomputationProviderError(
+                "Biocomputation service returned invalid JSON."
+            ) from error
+        if (
+            not isinstance(result, dict)
+            or result.get("protocol") != self.PROTOCOL
+            or "result" not in result
+        ):
+            raise BiocomputationProviderError(
+                f"Biocomputation response must include protocol '{self.PROTOCOL}' and a result."
+            )
+        return result
+
+
 class LLMProvider:
     """Standard-library adapters for OpenAI-compatible APIs and Gemini."""
 
@@ -1370,6 +1446,11 @@ class AIEngine:
         result = self.step(input_value, provider_analysis=normalized["analysis"])
         result["reply"] = normalized["reply"]
         return result
+
+    def compute_biological(self, task, provider=None):
+        """Submit an explicit task to a biological-computation service."""
+        active_provider = provider or BiocomputationProvider()
+        return active_provider.compute(task)
 
     def sync_model(self):
         self.model["updatedAt"] = now()

@@ -294,6 +294,74 @@ class ModelFileTests(unittest.TestCase):
         self.assertEqual(request.full_url, "https://api.openai.com/v1/chat/completions")
         self.assertEqual(json.loads(request.data)["messages"][1]["role"], "user")
 
+    def test_biocomputation_provider_posts_versioned_task_and_returns_result(self):
+        response_body = {
+            "protocol": "noesis-biocompute/v1",
+            "result": {"value": 1},
+            "provider": "lab-adapter",
+            "run_id": "run-123",
+        }
+        response = io.BytesIO(json.dumps(response_body).encode())
+        provider = self.model_module.BiocomputationProvider(
+            "https://bio.example.test/compute", api_key="test-key"
+        )
+
+        with patch("urllib.request.urlopen", return_value=response) as urlopen:
+            result = provider.compute({"operation": "example", "inputs": {"x": 1}})
+
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.full_url, "https://bio.example.test/compute")
+        self.assertEqual(request.get_header("Authorization"), "Bearer test-key")
+        self.assertEqual(
+            json.loads(request.data),
+            {
+                "protocol": "noesis-biocompute/v1",
+                "task": {"operation": "example", "inputs": {"x": 1}},
+            },
+        )
+        self.assertEqual(result, response_body)
+
+    def test_biocomputation_provider_requires_secure_remote_endpoint(self):
+        with self.assertRaisesRegex(ValueError, "HTTPS"):
+            self.model_module.BiocomputationProvider("http://bio.example.test/compute")
+        self.assertEqual(
+            self.model_module.BiocomputationProvider(
+                "http://localhost:9000/compute"
+            ).endpoint,
+            "http://localhost:9000/compute",
+        )
+
+    def test_biocomputation_provider_rejects_mismatched_response_protocol(self):
+        response = io.BytesIO(
+            json.dumps({"protocol": "other/v1", "result": True}).encode()
+        )
+        provider = self.model_module.BiocomputationProvider(
+            "https://bio.example.test/compute"
+        )
+
+        with patch("urllib.request.urlopen", return_value=response):
+            with self.assertRaisesRegex(
+                self.model_module.BiocomputationProviderError, "noesis-biocompute/v1"
+            ):
+                provider.compute({"operation": "example"})
+
+    def test_engine_submits_biocomputation_task_without_mutating_model(self):
+        class FakeProvider:
+            def compute(self, task):
+                self.task = task
+                return {"protocol": "fake", "result": 7}
+
+        provider = FakeProvider()
+        engine = self.model_module.AIEngine()
+        initial_cycle = engine.get_state()["cycle"]
+        task = {"operation": "example", "inputs": {"x": 3}}
+
+        result = engine.compute_biological(task, provider)
+
+        self.assertEqual(provider.task, task)
+        self.assertEqual(result["result"], 7)
+        self.assertEqual(engine.get_state()["cycle"], initial_cycle)
+
     def test_gemini_provider_extracts_generated_reply(self):
         response = io.BytesIO(
             json.dumps(

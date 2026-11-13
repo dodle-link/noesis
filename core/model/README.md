@@ -17,6 +17,35 @@ The workspace keeps external input distinct from internal state and broadcasts b
 
 The engine also maintains bounded `bioSignals` (`novelty`, `stress`, `recovery`, and derived `arousal`) as software-only regulatory variables. Inputs and actions update these signals; novelty and recovery can enable workspace-guided exploration or learning, while high stress suppresses those effortful actions. They are biological analogies, not modeled chemical concentrations or literal biocomputation.
 
+## Connect a biological-computation platform
+
+`BiocomputationProvider` is an opt-in bridge for a laboratory or vendor service that performs computation using a biological substrate. Noesis does not synthesize DNA, control laboratory equipment, or perform biological computation locally; the remote service must implement the platform-specific mapping from a task to its biological process.
+
+The provider sends a JSON `POST` to the configured endpoint. Requests use this versioned envelope:
+
+```json
+{
+    "protocol": "noesis-biocompute/v1",
+    "task": {"operation": "your-platform-operation", "inputs": {"value": 1}}
+}
+```
+
+The endpoint must respond with JSON containing the same `protocol` and a `result` field. Optional `provider` and `run_id` fields can identify the platform and experiment. Configure `NOESIS_BIOCOMPUTE_URL` and, if required, `NOESIS_BIOCOMPUTE_API_KEY`; remote endpoints must use HTTPS. HTTP is permitted only for localhost development. The key is sent as a bearer token and is never included in the model file.
+
+```python
+from model.me import AIEngine, BiocomputationProvider
+
+engine = AIEngine()
+provider = BiocomputationProvider()  # Reads NOESIS_BIOCOMPUTE_URL and optional API key
+result = engine.compute_biological(
+        {"operation": "your-platform-operation", "inputs": {"value": 1}},
+        provider=provider,
+)
+print(result["result"])
+```
+
+`compute_biological()` is explicit and does not change model state. The protocol is a transport contract, not a standardized biological-computation format; an adapter at the platform endpoint must translate its operations and results. Do not connect this interface to instruments or biological processes without platform-specific validation and appropriate laboratory safety review.
+
 Live Preview: [noesis.dodle.link/model](https://noesis.dodle.link/model/)
 
 ## Create a model file
