@@ -7,83 +7,20 @@ tags:
 ---
 # Core Model
 
-`me.py` implements a small stateful AI model. It combines a feed-forward neural network with state, goals, memory, rules, and a behavior program. It uses only the Python standard library.
+`me.py` is a small, stateful AI model built with Python's standard library. It combines a neural network with goals, memory, rules, and a behavior program.
 
-The engine selects actions from enabled rules, falling back to its behavior program. The neural network's output is included in each step's interpretation, but it does not currently select the action.
+This guide starts with the basics, then covers training, model files, and optional integrations. It also distinguishes what the software does today from the ideas it uses as inspiration.
 
-Each engine cycle also updates a persisted workspace snapshot with the current input focus, most salient unmet goal, selected intention, predicted state, observed outcome, and prediction error. This provides a functional self-monitoring trace; it is not evidence that the model has subjective experience.
+## Quick start
 
-The workspace keeps external input distinct from internal state and broadcasts both alongside the active goal, chosen intention, prediction, and outcome. When no higher-priority rule applies, an active `learn` goal can guide the action instead of the default `observe`. This is a small, testable implementation of an integrated-workspace/self-model hypothesis; it does not simulate quantum effects or establish consciousness.
-
-The engine also maintains bounded `bioSignals` (`novelty`, `stress`, `recovery`, and derived `arousal`) as software-only regulatory variables. Inputs and actions update these signals; novelty and recovery can enable workspace-guided exploration or learning, while high stress suppresses those effortful actions. They are biological analogies, not modeled chemical concentrations or literal biocomputation.
-
-## Connect a biological-computation platform
-
-`BiocomputationProvider` is an opt-in bridge for a laboratory or vendor service that performs computation using a biological substrate. Noesis does not synthesize DNA, control laboratory equipment, or perform biological computation locally; the remote service must implement the platform-specific mapping from a task to its biological process.
-
-The provider sends a JSON `POST` to the configured endpoint. Requests use this versioned envelope:
-
-```json
-{
-    "protocol": "noesis-biocompute/v1",
-    "task": {"operation": "your-platform-operation", "inputs": {"value": 1}}
-}
-```
-
-The endpoint must respond with JSON containing the same `protocol` and a `result` field. Optional `provider` and `run_id` fields can identify the platform and experiment. Configure `NOESIS_BIOCOMPUTE_URL` and, if required, `NOESIS_BIOCOMPUTE_API_KEY`; remote endpoints must use HTTPS. HTTP is permitted only for localhost development. The key is sent as a bearer token and is never included in the model file.
-
-```python
-from model.me import AIEngine, BiocomputationProvider
-
-engine = AIEngine()
-provider = BiocomputationProvider()  # Reads NOESIS_BIOCOMPUTE_URL and optional API key
-result = engine.compute_biological(
-        {"operation": "your-platform-operation", "inputs": {"value": 1}},
-        provider=provider,
-)
-print(result["result"])
-```
-
-`compute_biological()` is explicit and does not change model state. The protocol is a transport contract, not a standardized biological-computation format; an adapter at the platform endpoint must translate its operations and results. Do not connect this interface to instruments or biological processes without platform-specific validation and appropriate laboratory safety review.
-
-Live Preview: [noesis.dodle.link/model](https://noesis.dodle.link/model/)
-
-## Create a model file
-
-Run the script from the `core/model/` directory:
+Create the default model files from this directory:
 
 ```bash
 cd core/model
 python3 me.py
 ```
 
-This creates `noe-model.dodl` and `noe-model.F32.gguf` in the current directory. The `F32` suffix identifies the GGUF file's float32 tensor type. The DODL file stores the complete model, including its state, memory, rules, behavior, and network. The GGUF file contains the network's four float32 tensors, architecture dimensions, and workspace format/version markers; it uses the custom `noesis` architecture and requires a compatible runtime to execute. The live workspace state remains in DODL.
-
-`create_model_file(path)` is also available when creating a model from Python; it writes the binary DODL format and returns the model object. Pass that model to `create_gguf_model_file(path, model)` to write the matching GGUF file.
-
-The path may be a string or another path-like value. Its parent directory must already exist. The file is binary; open it with `"rb"` when reading.
-
-## Train the pixel controller
-
-The pixel demo uses the same DODL container with a controller-specific network: eight normalized inputs (pixel position and velocity, pointer offset and presence, and excitement) and two steering outputs. Train it from `core/model/`:
-
-```bash
-python3 me.py --train-pixel
-```
-
-This writes `noe-pixel-model.dodl` without replacing the general-purpose `noe-model.dodl`. Training is supervised by a built-in steering policy that moves away from a nearby pointer and screen edges. `--samples`, `--epochs`, `--seed`, and `--output` can be supplied to adjust training, choose another output path, and make training repeatable. The browser runs inference only; it does not update the model.
-
-Serve `core/model/` over HTTP so the browser can fetch the binary model:
-
-```bash
-python3 -m http.server 8000
-```
-
-Then open `http://localhost:8000/`. `index.html` loads `me.js`, which fetches `noe-pixel-model.dodl`; if the file is missing or is not a pixel model, the demo falls back to its built-in steering behavior.
-
-## Load and use a model
-
-Deserialize the file into a model, then pass it to `AIEngine`:
+This writes `noe-model.dodl` and `noe-model.F32.gguf` in the current directory. Load the DODL file and run one model step like this:
 
 ```python
 from model.me import AIEngine, deserialize_model
@@ -96,7 +33,65 @@ result = engine.step({"type": "user_input", "value": "hello"})
 print(result["action"])
 ```
 
-Alternatively, `AIEngine.import_model(data)` constructs an engine directly from serialized bytes. `AIEngine.export_model()` returns the engine's current model as serialized bytes; write those bytes to a file to persist the latest state:
+## How the model works
+
+Enabled rules choose actions first. If no rule applies, the behavior program is used. The neural network processes each input, and its output is available in the step's interpretation, but it does not choose the action.
+
+Each step saves a workspace snapshot with the input focus, active goal, intention, predicted state, observed outcome, and prediction error. This is a practical self-monitoring trace, not evidence that the model has subjective experience. When the default `observe` action would otherwise be chosen, an active `learn` goal can guide the model to learn instead.
+
+The model tracks `bioSignals` named `novelty`, `stress`, `recovery`, and `arousal`. These bounded software variables can influence exploration and learning. They are biological analogies, not chemical measurements or biological computation. The model also does not simulate quantum effects or establish consciousness.
+
+Live Preview: [noesis.dodle.link/model](https://noesis.dodle.link/model/)
+
+## Create a model file
+
+Run the script from the `core/model/` directory:
+
+```bash
+cd core/model
+python3 me.py
+```
+
+The `F32` suffix identifies the GGUF file's float32 tensor type. DODL stores the complete model, including its state, memory, rules, behavior, and network. GGUF stores the network's four float32 tensors, architecture dimensions, and workspace format/version markers. It uses the custom `noesis` architecture and requires a compatible runtime. Live workspace state stays in DODL.
+
+`create_model_file(path)` is also available when creating a model from Python; it writes the binary DODL format and returns the model object. Pass that model to `create_gguf_model_file(path, model)` to write the matching GGUF file.
+
+The path may be a string or another path-like value. Its parent directory must already exist. The file is binary; open it with `"rb"` when reading.
+
+## Train the pixel controller
+
+The pixel demo also uses DODL, but has a network specialized for steering. It takes eight normalized inputs (pixel position and velocity, pointer offset and presence, and excitement) and produces two steering outputs. Train it from `core/model/`:
+
+```bash
+python3 me.py --train-pixel
+```
+
+This writes `noe-pixel-model.dodl` and leaves `noe-model.dodl` untouched. Training uses a built-in steering policy that moves away from a nearby pointer and screen edges. Use `--samples` and `--epochs` to adjust training, `--seed` to make it repeatable, or `--output` to choose another path. The browser only runs the trained model; it does not train it.
+
+Serve `core/model/` over HTTP so the browser can load the model:
+
+```bash
+python3 -m http.server 8000
+```
+
+Open `http://localhost:8000/`. The page loads `me.js`, which fetches `noe-pixel-model.dodl`. If the file is missing or has the wrong model type, the demo uses its built-in steering behavior instead.
+
+## Load and use a model
+
+Load the saved model into `AIEngine`:
+
+```python
+from model.me import AIEngine, deserialize_model
+
+with open("noe-model.dodl", "rb") as model_file:
+    model = deserialize_model(model_file.read())
+
+engine = AIEngine(model)
+result = engine.step({"type": "user_input", "value": "hello"})
+print(result["action"])
+```
+
+`AIEngine.import_model(data)` loads a model from serialized bytes. `AIEngine.export_model()` returns the current model as bytes, which you can save to keep the latest state:
 
 ```python
 with open("noe-model.dodl", "wb") as model_file:
@@ -155,6 +150,35 @@ with open("noe-model.dodl", "wb") as model_file:
 ```
 
 `respond()` asks the provider for a reply and structured analysis, then runs one local engine step. The analysis is bounded and stored in the workspace as `providerAnalysis`, where it is included in the cycle broadcast. Providers that only implement the older `generate()` method remain supported and produce no analysis. The provider does not choose the engine's action; local rules and behavior remain in control. This self-monitoring architecture is not evidence of subjective experience. `LLMProviderError` is raised for provider request or response errors.
+
+## Connect a biological-computation platform
+
+`BiocomputationProvider` lets Noesis send a task to a lab or vendor service that performs computation using a biological system. Noesis does not perform that computation itself, synthesize DNA, or control lab equipment. The remote service is responsible for translating Noesis tasks into operations its platform supports.
+
+The provider sends a JSON `POST` request in this format:
+
+```json
+{
+    "protocol": "noesis-biocompute/v1",
+    "task": {"operation": "your-platform-operation", "inputs": {"value": 1}}
+}
+```
+
+The service must return JSON with the same `protocol` and a `result` field. It can also include `provider` and `run_id` to identify the service and run. Set `NOESIS_BIOCOMPUTE_URL` and, if needed, `NOESIS_BIOCOMPUTE_API_KEY`. Remote endpoints must use HTTPS; HTTP is allowed for localhost development. The API key is sent as a bearer token and is never saved in the model file.
+
+```python
+from model.me import AIEngine, BiocomputationProvider
+
+engine = AIEngine()
+provider = BiocomputationProvider()  # Reads the URL and optional API key from the environment
+result = engine.compute_biological(
+        {"operation": "your-platform-operation", "inputs": {"value": 1}},
+        provider=provider,
+)
+print(result["result"])
+```
+
+This call is explicit and does not change model state. The protocol is a transport contract, not a standard format for biological computation. Your platform needs an adapter that understands its operations and results. Validate the integration for your platform and follow appropriate lab safety procedures before connecting it to biological processes or equipment.
 
 ## Model format and limits
 
