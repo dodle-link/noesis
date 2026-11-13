@@ -1212,8 +1212,10 @@ class AIEngine:
     def observe(self, input_value):
         return {"input": input_value, "timestamp": now(), "state": dict(self.state)}
 
-    def interpret(self, perception):
-        return self.network.forward(self.encode_input(perception["input"]))
+    def interpret(self, perception, input_vector=None):
+        if input_vector is None:
+            input_vector = self.encode_input(perception["input"])
+        return self.network.forward(input_vector)
 
     def sense_bio_signals(self, input_value):
         signals = self.state["bioSignals"]
@@ -1360,8 +1362,9 @@ class AIEngine:
             reward += 0.5
         return {"reward": reward, "perception": perception, "action": action, "result": result}
 
-    def learn(self, evaluation):
-        input_vector = self.encode_input(evaluation["perception"]["input"])
+    def learn(self, evaluation, input_vector=None):
+        if input_vector is None:
+            input_vector = self.encode_input(evaluation["perception"]["input"])
         target = array("f", [evaluation["reward"]]) * self.network.output_size
         self.network.learn(input_vector, target, CONFIG["LEARNING_RATE"])
         action = evaluation["action"]
@@ -1391,7 +1394,8 @@ class AIEngine:
     def step(self, input_value, provider_analysis=None):
         perception = self.observe(input_value)
         self.sense_bio_signals(input_value)
-        interpretation = self.interpret(perception)
+        input_vector = self.encode_input(perception["input"])
+        interpretation = self.interpret(perception, input_vector)
         workspace = self.open_workspace(perception)
         workspace["providerAnalysis"] = copy.deepcopy(provider_analysis)
         workspace["internalState"]["bioSignals"] = copy.deepcopy(self.state["bioSignals"])
@@ -1416,7 +1420,7 @@ class AIEngine:
             "bioSignals": copy.deepcopy(self.state["bioSignals"]),
         }
         evaluation = self.evaluate(perception, action, result)
-        self.learn(evaluation)
+        self.learn(evaluation, input_vector)
         self.update_state(evaluation)
         self.sync_model()
         return {

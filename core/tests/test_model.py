@@ -46,6 +46,24 @@ class ModelFileTests(unittest.TestCase):
         self.assertAlmostEqual(network.weights2[0], 1.8)
         self.assertAlmostEqual(network.weights1[0], 0.6)
 
+    def test_ai_engine_learns_from_pre_action_input_state(self):
+        engine = self.model_module.AIEngine()
+        input_value = {"type": "user_input", "value": "hello"}
+        expected_input = list(engine.encode_input(input_value))
+        learned_inputs = []
+
+        with patch.object(
+            engine.network,
+            "learn",
+            side_effect=lambda inputs, target, learning_rate: learned_inputs.append(
+                list(inputs)
+            ),
+        ):
+            engine.step(input_value)
+
+        self.assertEqual(learned_inputs[0], expected_input)
+        self.assertNotEqual(learned_inputs[0][0], engine.state["energy"] / 100)
+
     def test_memory_limit_evicts_low_importance_without_reordering_recent_items(self):
         memory = self.model_module.MemoryStore()
         with patch.dict(self.model_module.CONFIG, {"MEMORY_LIMIT": 3}):
