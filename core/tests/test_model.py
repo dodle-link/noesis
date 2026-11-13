@@ -321,6 +321,20 @@ class ModelFileTests(unittest.TestCase):
         self.assertEqual(request.full_url, "https://api.openai.com/v1/chat/completions")
         self.assertEqual(json.loads(request.data)["messages"][1]["role"], "user")
 
+    def test_provider_limits_context_to_five_recent_memories(self):
+        response = io.BytesIO(
+            json.dumps({"choices": [{"message": {"content": "Hello"}}]}).encode()
+        )
+        provider = self.model_module.LLMProvider("openai-compatible")
+        memories = [{"index": index} for index in range(8)]
+
+        with patch("urllib.request.urlopen", return_value=response) as urlopen:
+            provider.generate("hello", {}, memories)
+
+        request_payload = json.loads(urlopen.call_args.args[0].data)
+        context = json.loads(request_payload["messages"][1]["content"])
+        self.assertEqual(context["recent_memory"], memories[-5:])
+
     def test_biocomputation_provider_posts_versioned_task_and_returns_result(self):
         response_body = {
             "protocol": "noesis-biocompute/v1",

@@ -1102,8 +1102,9 @@ class LLMProvider:
         return normalize_provider_response(text)
 
     def _generate(self, user_input, state, memories, structured):
+        recent_memories = memories[-5:] if isinstance(memories, (list, tuple)) else memories
         context = json.dumps(
-            {"input": user_input, "state": state, "recent_memory": memories},
+            {"input": user_input, "state": state, "recent_memory": recent_memories},
             ensure_ascii=False,
             separators=(",", ":"),
         )
