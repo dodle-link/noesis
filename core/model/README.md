@@ -22,7 +22,7 @@ python3 me.py
 This writes `noe-model.dodl` and `noe-model.F32.gguf` in the current directory. Load the DODL file and run one model step like this:
 
 ```python
-from model.me import AIEngine, deserialize_model
+from me import AIEngine, deserialize_model
 
 with open("noe-model.dodl", "rb") as model_file:
     model = deserialize_model(model_file.read())
@@ -79,7 +79,7 @@ Open `http://localhost:8000/`. The page loads `me.js`, which fetches `noe-pixel-
 Load the saved model into `AIEngine`:
 
 ```python
-from model.me import AIEngine, deserialize_model
+from me import AIEngine, deserialize_model
 
 with open("noe-model.dodl", "rb") as model_file:
     model = deserialize_model(model_file.read())
@@ -103,7 +103,7 @@ with open("noe-model.dodl", "wb") as model_file:
 Pass DODL model dictionaries or supported model-file paths, merge them, then serialize the result:
 
 ```python
-from model.me import merge_models, serialize_model
+from me import merge_models, serialize_model
 
 merged = merge_models("model-a.dodl", "model-b.onnx", alpha=0.5)
 with open("merged-model.dodl", "wb") as model_file:
@@ -134,7 +134,7 @@ export NOESIS_MODEL=llama3.2
 `NOESIS_API_KEY` is optional for local servers and can be set when the endpoint requires a key. Pass `base_url` directly to `LLMProvider` to override the environment setting.
 
 ```python
-from model.me import AIEngine, LLMProvider
+from me import AIEngine, LLMProvider
 
 with open("noe-model.dodl", "rb") as model_file:
     engine = AIEngine.import_model(model_file.read())
@@ -165,7 +165,7 @@ The provider sends a JSON `POST` request in this format:
 The service must return JSON with the same `protocol` and a `result` field. It can also include `provider` and `run_id` to identify the service and run. Set `NOESIS_BIOCOMPUTE_URL` and, if needed, `NOESIS_BIOCOMPUTE_API_KEY`. Remote endpoints must use HTTPS; HTTP is allowed for localhost development. The API key is sent as a bearer token and is never saved in the model file.
 
 ```python
-from model.me import AIEngine, BiocomputationProvider
+from me import AIEngine, BiocomputationProvider
 
 engine = AIEngine()
 provider = BiocomputationProvider()  # Reads the URL and optional API key from the environment
@@ -197,6 +197,8 @@ The file starts with the `DODL` magic signature and a versioned header. It store
 - `AIEngine.step(input_value)` observes input, chooses and executes an action, evaluates it, learns, updates state, and returns the cycle result.
 - `LLMProvider(provider=None)` configures an OpenAI, Gemini, or OpenAI-compatible text-generation adapter from environment variables.
 - `AIEngine.respond(input_value, provider=None)` generates a provider reply and runs one local engine step.
+- `BiocomputationProvider(endpoint=None, api_key=None)` submits explicit tasks to a remote biocomputation service.
+- `AIEngine.compute_biological(task, provider=None)` submits a task without changing model state.
 - `AIEngine.export_model()` serializes the engine's current model.
 
 ## License
