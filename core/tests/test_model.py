@@ -1,6 +1,7 @@
 import importlib.util
 import io
 import json
+import math
 import os
 import struct
 import subprocess
@@ -144,8 +145,13 @@ class ModelFileTests(unittest.TestCase):
     def test_train_pixel_model_writes_browser_compatible_network(self):
         with tempfile.TemporaryDirectory(prefix="pixel-model-tests-") as directory:
             path = os.path.join(directory, "pixel.dodl")
+            metrics = []
             self.model_module.train_pixel_model(
-                path, sample_count=8, epochs=1, seed=123
+                path,
+                sample_count=8,
+                epochs=1,
+                seed=123,
+                metrics_callback=lambda epoch, result: metrics.append((epoch, result)),
             )
             with open(path, "rb") as model_file:
                 model_data = model_file.read()
@@ -159,6 +165,9 @@ class ModelFileTests(unittest.TestCase):
             (network["inputSize"], network["hiddenSize"], network["outputSize"]),
             (8, 32, 2),
         )
+        self.assertEqual(len(metrics), 1)
+        self.assertEqual(metrics[0][0], 1)
+        self.assertTrue(all(math.isfinite(value) for value in metrics[0][1].values()))
         self.assertEqual(gguf_data, self.model_module.serialize_gguf_model(restored))
 
     def test_merge_models_interpolates_weights_without_mutating_inputs(self):

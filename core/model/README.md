@@ -64,7 +64,7 @@ The pixel demo also uses DODL, but has a network specialized for steering. It ta
 python3 me.py --train-pixel
 ```
 
-This writes `noe-pixel-model.dodl` and leaves `noe-model.dodl` untouched. Training uses a built-in steering policy that moves away from a nearby pointer and screen edges. Use `--samples` and `--epochs` to adjust training, `--seed` to make it repeatable, or `--output` to choose another path. The browser only runs the trained model; it does not train it.
+This writes `noe-pixel-model.dodl` and leaves `noe-model.dodl` untouched. Training uses a built-in steering policy that moves away from a nearby pointer and screen edges. Each epoch is scored on separate synthetic validation examples; the command reports validation MSE and per-axis MAE, keeps the best weights, and stops after `--patience` epochs without improvement. Use `--samples`, `--epochs`, and `--patience` to adjust training, `--seed` to make it repeatable, or `--output` to choose another path. The browser only runs the trained model; it does not train it.
 
 Serve `core/model/` over HTTP so the browser can load the model:
 

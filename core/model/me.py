@@ -315,11 +315,40 @@ def _pixel_training_example(random):
     return inputs, targets
 
 
-def train_pixel_model(path="noe-pixel-model.dodl", sample_count=1200, epochs=12, seed=None):
+def _pixel_validation_metrics(network, examples):
+    squared_errors = [0.0] * network.output_size
+    absolute_errors = [0.0] * network.output_size
+    for inputs, targets in examples:
+        outputs = network.forward(inputs)["output"]
+        for index in range(network.output_size):
+            error = outputs[index] - targets[index]
+            squared_errors[index] += error * error
+            absolute_errors[index] += abs(error)
+    sample_count = len(examples)
+    mse = sum(squared_errors) / (sample_count * network.output_size)
+    return {
+        "mse": mse,
+        "mae_x": absolute_errors[0] / sample_count,
+        "mae_y": absolute_errors[1] / sample_count,
+    }
+
+
+def train_pixel_model(
+    path="noe-pixel-model.dodl",
+    sample_count=1200,
+    epochs=12,
+    seed=None,
+    patience=4,
+    metrics_callback=None,
+):
     if not isinstance(sample_count, int) or sample_count < 1:
         raise ValueError("sample_count must be a positive integer.")
     if not isinstance(epochs, int) or epochs < 1:
         raise ValueError("epochs must be a positive integer.")
+    if not isinstance(patience, int) or patience < 1:
+        raise ValueError("patience must be a positive integer.")
+    if metrics_callback is not None and not callable(metrics_callback):
+        raise ValueError("metrics_callback must be callable.")
 
     random = Random(seed if seed is not None else random_int(1, 0xFFFFFFFF))
     model = create_model()
@@ -333,13 +362,35 @@ def train_pixel_model(path="noe-pixel-model.dodl", sample_count=1200, epochs=12,
     network.bias2 = array("f", [0]) * network.output_size
     network.initialize(random)
 
+    validation_count = max(128, min(512, sample_count // 5))
+    validation_examples = [_pixel_training_example(random) for _ in range(validation_count)]
     examples = [_pixel_training_example(random) for _ in range(sample_count)]
-    for _ in range(epochs):
+    best_loss = float("inf")
+    best_weights = None
+    stale_epochs = 0
+    for epoch in range(1, epochs + 1):
         for index in range(sample_count - 1, 0, -1):
             swap_index = int(random.next() * (index + 1))
             examples[index], examples[swap_index] = examples[swap_index], examples[index]
         for inputs, targets in examples:
             network.learn(inputs, targets, 0.01)
+        metrics = _pixel_validation_metrics(network, validation_examples)
+        if metrics_callback is not None:
+            metrics_callback(epoch, metrics)
+        if metrics["mse"] < best_loss:
+            best_loss = metrics["mse"]
+            best_weights = {
+                key: array("f", getattr(network, key))
+                for key in ("weights1", "bias1", "weights2", "bias2")
+            }
+            stale_epochs = 0
+        else:
+            stale_epochs += 1
+            if stale_epochs >= patience:
+                break
+
+    for key, values in best_weights.items():
+        setattr(network, key, values)
 
     model["randomSeed"] = random.seed
     model["network"] = {
@@ -1509,17 +1560,26 @@ if __name__ == "__main__":
     )
     parser.add_argument("--samples", type=int, default=1200)
     parser.add_argument("--epochs", type=int, default=12)
+    parser.add_argument("--patience", type=int, default=4)
     parser.add_argument("--seed", type=int)
     parser.add_argument("--output", default="noe-pixel-model.dodl")
     arguments = parser.parse_args()
 
     output_path = "noe-model.dodl"
     if arguments.train_pixel:
+        def report_metrics(epoch, metrics):
+            print(
+                f"epoch {epoch}: validation_mse={metrics['mse']:.6f} "
+                f"x_mae={metrics['mae_x']:.6f} y_mae={metrics['mae_y']:.6f}"
+            )
+
         train_pixel_model(
             arguments.output,
             sample_count=arguments.samples,
             epochs=arguments.epochs,
             seed=arguments.seed,
+            patience=arguments.patience,
+            metrics_callback=report_metrics,
         )
         gguf_output_path = os.path.splitext(arguments.output)[0] + ".F32.gguf"
         print(f"Pixel control model trained: {arguments.output}")
