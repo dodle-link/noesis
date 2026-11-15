@@ -14,7 +14,10 @@ from unittest.mock import patch
 
 def _load_model_module():
     base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    path = os.path.join(base, "model", "me.py")
+    model_directory = os.path.join(base, "model")
+    path = os.path.join(model_directory, "me.py")
+    if model_directory not in sys.path:
+        sys.path.insert(0, model_directory)
     spec = importlib.util.spec_from_file_location("model", path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Unable to load model module from {path}")
