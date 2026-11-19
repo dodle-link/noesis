@@ -172,7 +172,7 @@ The provider sends a JSON `POST` request in this format:
 }
 ```
 
-`operation` must be a non-empty string, and `inputs`, when provided, must be an object. The service must return JSON with the same `protocol` and a `result` field. It can also include string-valued `provider` and `run_id` fields to identify the service and run. Set `NOESIS_BIOCOMPUTE_URL` and, if needed, `NOESIS_BIOCOMPUTE_API_KEY`. Remote endpoints must use HTTPS; HTTP is allowed for localhost development. The API key is sent as a bearer token and is never saved in the model file.
+`operation` must be a non-empty string, and `inputs`, when provided, must be an object. The service must return standard JSON with the same `protocol` and a `result` field; `result` may be any JSON value. If supplied, the response content type must be `application/json` or use a `+json` media type. It can also include string-valued `provider` and `run_id` fields to identify the service and run. Set `NOESIS_BIOCOMPUTE_URL` and, if needed, `NOESIS_BIOCOMPUTE_API_KEY`. Remote endpoints must use HTTPS; HTTP is allowed for localhost development. Redirects are followed only when they remain on the same origin. Requests are not retried automatically because a repeated task could cause duplicate computation. The request timeout defaults to 30 seconds and must be a positive finite number. The API key is sent as a bearer token and is never saved in the model file.
 
 ```python
 from me import AIEngine, BiocomputationProvider
@@ -209,7 +209,7 @@ The file starts with the `DODL` magic signature and a versioned header. It store
 - `AIEngine.step(input_value)` observes input, chooses and executes an action, evaluates it, learns, updates state, and returns the cycle result.
 - `LLMProvider(provider=None)` configures an OpenAI, Gemini, or OpenAI-compatible text-generation adapter from environment variables.
 - `AIEngine.respond(input_value, provider=None)` generates a provider reply and runs one local engine step.
-- `BiocomputationProvider(endpoint=None, api_key=None)` submits explicit tasks to a remote biocomputation service.
+- `BiocomputationProvider(endpoint=None, api_key=None, timeout=30)` submits explicit tasks to a remote biocomputation service.
 - `AIEngine.compute_biological(task, provider=None)` submits a task without changing model state.
 - `AIEngine.export_model()` serializes the engine's current model.
 

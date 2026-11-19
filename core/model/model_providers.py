@@ -1,3 +1,4 @@
+import http.client
 import json
 import math
 import os
@@ -8,6 +9,38 @@ import urllib.request
 
 def _clamp(value, minimum, maximum):
     return max(minimum, min(maximum, value))
+
+
+def _reject_json_constant(value):
+    raise ValueError(f"Invalid JSON constant '{value}'.")
+
+
+class _SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def __init__(self, endpoint):
+        super().__init__()
+        parsed_endpoint = urllib.parse.urlsplit(endpoint)
+        self.origin = (
+            parsed_endpoint.scheme,
+            parsed_endpoint.hostname,
+            parsed_endpoint.port,
+        )
+
+    def redirect_request(self, request, file_pointer, code, message, headers, new_url):
+        try:
+            parsed_url = urllib.parse.urlsplit(new_url)
+            origin = (parsed_url.scheme, parsed_url.hostname, parsed_url.port)
+        except ValueError:
+            return None
+        if (
+            origin != self.origin
+            or parsed_url.username is not None
+            or parsed_url.password is not None
+            or "#" in new_url
+        ):
+            return None
+        return super().redirect_request(
+            request, file_pointer, code, message, headers, new_url
+        )
 
 
 class LLMProviderError(RuntimeError):
@@ -28,15 +61,40 @@ class BiocomputationProvider:
         self.endpoint = endpoint or os.environ.get("NOESIS_BIOCOMPUTE_URL")
         if not self.endpoint:
             raise ValueError("Set NOESIS_BIOCOMPUTE_URL or pass endpoint.")
-        parsed_endpoint = urllib.parse.urlparse(self.endpoint)
+        if not isinstance(self.endpoint, str):
+            raise ValueError("Biocomputation endpoint must be a URL string.")
+        try:
+            parsed_endpoint = urllib.parse.urlsplit(self.endpoint)
+            hostname = parsed_endpoint.hostname
+            parsed_endpoint.port
+        except ValueError as error:
+            raise ValueError("Biocomputation endpoint is malformed.") from error
         local_hosts = {"localhost", "127.0.0.1", "::1"}
         if parsed_endpoint.scheme != "https" and not (
-            parsed_endpoint.scheme == "http" and parsed_endpoint.hostname in local_hosts
+            parsed_endpoint.scheme == "http" and hostname in local_hosts
         ):
             raise ValueError("Biocomputation endpoint must use HTTPS (HTTP is allowed for localhost).")
-        if not parsed_endpoint.hostname:
+        if not hostname:
             raise ValueError("Biocomputation endpoint must include a hostname.")
+        if any(character.isspace() for character in hostname):
+            raise ValueError("Biocomputation endpoint hostname is malformed.")
+        if parsed_endpoint.username is not None or parsed_endpoint.password is not None:
+            raise ValueError("Biocomputation endpoint must not contain credentials.")
+        if "#" in self.endpoint:
+            raise ValueError("Biocomputation endpoint must not contain a fragment.")
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
+            raise ValueError("Biocomputation timeout must be a positive finite number.")
+        try:
+            timeout = float(timeout)
+        except (OverflowError, ValueError) as error:
+            raise ValueError(
+                "Biocomputation timeout must be a positive finite number."
+            ) from error
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("Biocomputation timeout must be a positive finite number.")
         self.api_key = api_key or os.environ.get("NOESIS_BIOCOMPUTE_API_KEY")
+        if self.api_key is not None and not isinstance(self.api_key, str):
+            raise ValueError("Biocomputation API key must be a string.")
         self.timeout = timeout
 
     def compute(self, task):
@@ -62,25 +120,54 @@ class BiocomputationProvider:
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
-        request = urllib.request.Request(
-            self.endpoint, data=payload, headers=headers, method="POST"
-        )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            request = urllib.request.Request(
+                self.endpoint, data=payload, headers=headers, method="POST"
+            )
+            opener = urllib.request.build_opener(
+                _SameOriginRedirectHandler(self.endpoint)
+            )
+            with opener.open(request, timeout=self.timeout) as response:
+                response_headers = getattr(response, "headers", None)
+                content_type = (
+                    response_headers.get("Content-Type")
+                    if response_headers is not None
+                    else None
+                )
+                if content_type is None and hasattr(response, "getheader"):
+                    content_type = response.getheader("Content-Type")
+                if content_type is not None:
+                    media_type = content_type.split(";", 1)[0].strip().lower()
+                    if media_type != "application/json" and not media_type.endswith(
+                        "+json"
+                    ):
+                        raise BiocomputationProviderError(
+                            "Biocomputation service response must use a JSON content type."
+                        )
                 response_data = response.read(self.MAX_PAYLOAD_SIZE + 1)
         except urllib.error.HTTPError as error:
             raise BiocomputationProviderError(
                 f"Biocomputation service returned HTTP {error.code}."
             ) from error
-        except (urllib.error.URLError, TimeoutError) as error:
+        except BiocomputationProviderError:
+            raise
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            OSError,
+            http.client.HTTPException,
+            ValueError,
+        ) as error:
             raise BiocomputationProviderError(
-                f"Biocomputation service request failed: {error}."
+                f"Biocomputation service request failed ({type(error).__name__})."
             ) from error
         if len(response_data) > self.MAX_PAYLOAD_SIZE:
             raise BiocomputationProviderError("Biocomputation response exceeds the 1 MiB limit.")
         try:
-            result = json.loads(response_data.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            result = json.loads(
+                response_data.decode("utf-8"), parse_constant=_reject_json_constant
+            )
+        except (UnicodeDecodeError, ValueError) as error:
             raise BiocomputationProviderError(
                 "Biocomputation service returned invalid JSON."
             ) from error

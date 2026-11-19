@@ -423,10 +423,11 @@ class ModelFileTests(unittest.TestCase):
             "https://bio.example.test/compute", api_key="test-key"
         )
 
-        with patch("urllib.request.urlopen", return_value=response) as urlopen:
+        with patch("urllib.request.build_opener") as build_opener:
+            build_opener.return_value.open.return_value = response
             result = provider.compute({"operation": "example", "inputs": {"x": 1}})
 
-        request = urlopen.call_args.args[0]
+        request = build_opener.return_value.open.call_args.args[0]
         self.assertEqual(request.full_url, "https://bio.example.test/compute")
         self.assertEqual(request.get_header("Authorization"), "Bearer test-key")
         self.assertEqual(
@@ -456,7 +457,8 @@ class ModelFileTests(unittest.TestCase):
             "https://bio.example.test/compute"
         )
 
-        with patch("urllib.request.urlopen", return_value=response):
+        with patch("urllib.request.build_opener") as build_opener:
+            build_opener.return_value.open.return_value = response
             with self.assertRaisesRegex(
                 self.model_module.BiocomputationProviderError, "noesis-biocompute/v1"
             ):
@@ -488,12 +490,153 @@ class ModelFileTests(unittest.TestCase):
             "https://bio.example.test/compute"
         )
 
-        with patch("urllib.request.urlopen", return_value=response):
+        with patch("urllib.request.build_opener") as build_opener:
+            build_opener.return_value.open.return_value = response
             with self.assertRaisesRegex(
                 self.model_module.BiocomputationProviderError,
                 "run_id.*must be a string",
             ):
                 provider.compute({"operation": "example"})
+
+    def test_biocomputation_provider_rejects_malformed_or_credentialed_endpoints(self):
+        for endpoint in (
+            "https://bio.example.test:invalid/compute",
+            "https://user:secret@bio.example.test/compute",
+            "https://bio.example.test/compute#fragment",
+            "https://bio.example.test/compute#",
+            "https://bad host/compute",
+            "https://[::1/compute",
+        ):
+            with self.subTest(endpoint=endpoint), self.assertRaises(ValueError):
+                self.model_module.BiocomputationProvider(endpoint)
+
+    def test_biocomputation_provider_requires_positive_finite_timeout(self):
+        for timeout in (0, -1, float("inf"), float("nan"), True, "30", 10**10000):
+            with self.subTest(timeout_type=type(timeout).__name__), self.assertRaisesRegex(
+                ValueError, "timeout must be a positive finite number"
+            ):
+                self.model_module.BiocomputationProvider(
+                    "https://bio.example.test/compute", timeout=timeout
+                )
+
+    def test_biocomputation_provider_follows_only_same_origin_redirects(self):
+        provider_module = sys.modules["model_providers"]
+        handler = provider_module._SameOriginRedirectHandler(
+            "https://bio.example.test/compute"
+        )
+        request = provider_module.urllib.request.Request(
+            "https://bio.example.test/compute"
+        )
+        redirect_args = (request, io.BytesIO(), 307, "Temporary Redirect", {})
+
+        same_origin = handler.redirect_request(
+            *redirect_args, "https://bio.example.test/v2/compute"
+        )
+        other_host = handler.redirect_request(
+            *redirect_args, "https://other.example.test/compute"
+        )
+        downgrade = handler.redirect_request(
+            *redirect_args, "http://bio.example.test/compute"
+        )
+
+        self.assertIsNotNone(same_origin)
+        self.assertIsNone(other_host)
+        self.assertIsNone(downgrade)
+
+    def test_biocomputation_provider_rejects_non_json_content_type(self):
+        response = io.BytesIO(
+            json.dumps(
+                {"protocol": "noesis-biocompute/v1", "result": True}
+            ).encode()
+        )
+        response.headers = {"Content-Type": "text/plain"}
+        provider = self.model_module.BiocomputationProvider(
+            "https://bio.example.test/compute"
+        )
+
+        with patch("urllib.request.build_opener") as build_opener:
+            build_opener.return_value.open.return_value = response
+            with self.assertRaisesRegex(
+                self.model_module.BiocomputationProviderError, "JSON content type"
+            ):
+                provider.compute({"operation": "example"})
+
+    def test_biocomputation_provider_rejects_nonstandard_json_constants(self):
+        response = io.BytesIO(
+            b'{"protocol":"noesis-biocompute/v1","result":NaN}'
+        )
+        provider = self.model_module.BiocomputationProvider(
+            "https://bio.example.test/compute"
+        )
+
+        with patch("urllib.request.build_opener") as build_opener:
+            build_opener.return_value.open.return_value = response
+            with self.assertRaisesRegex(
+                self.model_module.BiocomputationProviderError, "invalid JSON"
+            ):
+                provider.compute({"operation": "example"})
+
+    def test_biocomputation_provider_sanitizes_transport_errors_without_retrying(self):
+        provider = self.model_module.BiocomputationProvider(
+            "https://bio.example.test/private-path?token=secret"
+        )
+
+        with patch("urllib.request.build_opener") as build_opener:
+            build_opener.return_value.open.side_effect = OSError(
+                "failed for https://bio.example.test/private-path?token=secret"
+            )
+            with self.assertRaisesRegex(
+                self.model_module.BiocomputationProviderError,
+                r"request failed \(OSError\)",
+            ) as error:
+                provider.compute({"operation": "example"})
+
+        self.assertNotIn("secret", str(error.exception))
+        build_opener.return_value.open.assert_called_once()
+
+    def test_biocomputation_provider_rejects_non_finite_task_values(self):
+        provider = self.model_module.BiocomputationProvider(
+            "https://bio.example.test/compute"
+        )
+
+        with self.assertRaisesRegex(ValueError, "finite JSON values"):
+            provider.compute({"operation": "example", "inputs": {"value": float("nan")}})
+
+    def test_biocomputation_provider_enforces_payload_size_limits(self):
+        provider = self.model_module.BiocomputationProvider(
+            "https://bio.example.test/compute"
+        )
+        oversized_task = {
+            "operation": "example",
+            "inputs": {"value": "x" * provider.MAX_PAYLOAD_SIZE},
+        }
+
+        with self.assertRaisesRegex(ValueError, "1 MiB payload limit"):
+            provider.compute(oversized_task)
+
+        response = io.BytesIO(b"x" * (provider.MAX_PAYLOAD_SIZE + 1))
+        with patch("urllib.request.build_opener") as build_opener:
+            build_opener.return_value.open.return_value = response
+            with self.assertRaisesRegex(
+                self.model_module.BiocomputationProviderError,
+                "response exceeds the 1 MiB limit",
+            ):
+                provider.compute({"operation": "example"})
+
+    def test_biocomputation_provider_handles_timeouts_without_retrying(self):
+        provider = self.model_module.BiocomputationProvider(
+            "https://bio.example.test/compute"
+        )
+
+        with patch("urllib.request.build_opener") as build_opener:
+            build_opener.return_value.open.side_effect = TimeoutError("timed out")
+            with self.assertRaisesRegex(
+                self.model_module.BiocomputationProviderError,
+                r"request failed \(TimeoutError\)",
+            ):
+                provider.compute({"operation": "example"})
+
+        build_opener.return_value.open.assert_called_once()
 
     def test_engine_submits_biocomputation_task_without_mutating_model(self):
         class FakeProvider:
