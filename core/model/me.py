@@ -1570,15 +1570,15 @@ if __name__ == "__main__":
             )
 
         train_pixel_model(
-            arguments.output,
+            output_path,
             sample_count=arguments.samples,
             epochs=arguments.epochs,
             seed=arguments.seed,
             patience=arguments.patience,
             metrics_callback=report_metrics,
         )
-        gguf_output_path = os.path.splitext(arguments.output)[0] + ".F32.gguf"
-        print(f"Pixel control model trained: {arguments.output}")
+        gguf_output_path = os.path.splitext(output_path)[0] + ".F32.gguf"
+        print(f"Pixel control model trained: {output_path}")
         print(f"GGUF model file created: {gguf_output_path}")
     else:
         model = create_model_file(output_path)
