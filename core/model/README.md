@@ -7,7 +7,7 @@ tags:
 ---
 # Core Model
 
-`me.py` contains a small Python model that keeps state between steps. It combines a neural network with rules, goals, memory, and a simple behavior program. An optional language-model provider can write replies, but the local model still chooses its actions.
+`me.py` is a stateful Python agent that selects actions using rules, goals, memory, and a trained neural policy. An optional language model can write replies, but the agent controls actions.
 
 ## Files in this folder
 
