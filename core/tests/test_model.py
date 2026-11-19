@@ -80,6 +80,67 @@ class ModelFileTests(unittest.TestCase):
         self.assertEqual(first_vector, list(engine.encode_input(first)))
         self.assertTrue(all(-1 <= value <= 1 for value in first_vector[7:]))
 
+    def test_action_model_training_is_repeatable_and_beats_observe_baseline(self):
+        with tempfile.TemporaryDirectory(prefix="action-model-tests-") as directory:
+            metrics_a = []
+            model_a = self.model_module.train_action_model(
+                os.path.join(directory, "first.dodl"),
+                sample_count=400,
+                epochs=10,
+                seed=17,
+                patience=5,
+                metrics_callback=lambda epoch, result: metrics_a.append(result),
+            )
+            metrics_b = []
+            model_b = self.model_module.train_action_model(
+                os.path.join(directory, "second.dodl"),
+                sample_count=400,
+                epochs=10,
+                seed=17,
+                patience=5,
+                metrics_callback=lambda epoch, result: metrics_b.append(result),
+            )
+
+        for key in ("weights1", "bias1", "weights2", "bias2"):
+            self.assertEqual(list(model_a["network"][key]), list(model_b["network"][key]))
+        for hidden_index in range(model_a["network"]["hiddenSize"]):
+            start = hidden_index * model_a["network"]["inputSize"]
+            self.assertTrue(
+                all(
+                    model_a["network"]["weights1"][start + input_index] == 0
+                    for input_index in range(4, model_a["network"]["inputSize"])
+                )
+            )
+        self.assertEqual(metrics_a, metrics_b)
+        restored = self.model_module.deserialize_model(
+            self.model_module.serialize_model(model_a)
+        )
+        self.assertTrue(restored["network"]["policyTrained"])
+        metrics = self.model_module.evaluate_action_model(restored)
+        self.assertTrue(metrics["policy_trained"])
+        self.assertGreater(metrics["accuracy"], metrics["baseline_accuracy"])
+
+    def test_trained_policy_selects_action_but_explicit_rules_still_override(self):
+        model = self.model_module.create_model()
+        network = model["network"]
+        network["outputSize"] = 4
+        network["weights2"] = self.model_module.array("f", [0]) * (
+            network["hiddenSize"] * network["outputSize"]
+        )
+        network["bias2"] = self.model_module.array("f", [0, 0, 2, 0])
+        network["policyTrained"] = True
+        engine = self.model_module.AIEngine(model)
+        engine.state["energy"] = 80
+        engine.state["curiosity"] = 60
+        engine.state["confidence"] = 50
+
+        learned = engine.step({"type": "user_input", "value": "choose"})
+        engine.state["energy"] = 10
+        overridden = engine.step({"type": "user_input", "value": "rest"})
+
+        self.assertEqual(learned["action"]["type"], "learn")
+        self.assertEqual(overridden["action"]["type"], "rest")
+
     def test_memory_limit_evicts_low_importance_without_reordering_recent_items(self):
         memory = self.model_module.MemoryStore()
         with patch.dict(self.model_module.CONFIG, {"MEMORY_LIMIT": 3}):

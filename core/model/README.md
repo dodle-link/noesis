@@ -34,11 +34,21 @@ print(result["action"])
 
 ## How the model works
 
-Enabled rules choose actions first. If no rule applies, the behavior program is used. The neural network processes each input, and its output is available in the step's interpretation, but it does not choose the action.
+Explicit rest/explore rules and eligible workspace-guided goals take priority. Ordinary models retain the existing rule and behavior-program policy. An action-trained model uses four neural outputs (`rest`, `explore`, `learn`, and `observe`) to choose an action when those higher-priority rules do not decide it. Older model files remain untrained and keep their existing behavior.
 
 Each step saves a workspace snapshot with the input focus, active goal, intention, predicted state, observed outcome, and prediction error. This is a practical self-monitoring trace, not evidence that the model has subjective experience. When the default `observe` action would otherwise be chosen, an active `learn` goal can guide the model to learn instead.
 
 The model tracks `bioSignals` named `novelty`, `stress`, `recovery`, and `arousal`. These bounded software variables can influence exploration and learning. They are biological analogies, not chemical measurements or biological computation. The model also does not simulate quantum effects or establish consciousness.
+
+## Train the action policy
+
+Train the Python engine's action policy from `core/model/`:
+
+```bash
+python3 me.py --train-actions --seed 123
+```
+
+This writes `noe-action-model.dodl` and its GGUF companion. Training uses a deterministic synthetic policy and a separate, fixed 100-scenario validation set. Each epoch reports validation accuracy, the always-`observe` baseline, and mean squared error; the best checkpoint is kept and training stops after `--patience` epochs without improvement. Use `--samples`, `--epochs`, and `--patience` to adjust the run, or `--output` to choose another path. Reusing the same seed and options produces the same trained weights and metrics. The DODL file marks the policy as trained; the engine then uses its action scores while preserving explicit rule and goal overrides.
 
 Live Preview: [noesis.dodle.link/model](https://noesis.dodle.link/model/)
 
@@ -192,6 +202,8 @@ The file starts with the `DODL` magic signature and a versioned header. It store
 - `deserialize_model(data)` converts DODL bytes back to a model.
 - `serialize_gguf_model(model)` converts the network tensors to GGUF v3 bytes.
 - `create_gguf_model_file(path, model)` writes those GGUF bytes to `path`.
+- `train_action_model(path, sample_count, epochs, seed, patience)` trains and saves a four-action policy.
+- `evaluate_action_model(model)` reports fixed-set accuracy, per-action accuracy, baseline accuracy, and MSE.
 - `merge_models(model_a, model_b, alpha=0.5)` blends compatible models' network parameters.
 - `AIEngine(model=None)` runs and updates a model; without an argument it creates a fresh one.
 - `AIEngine.step(input_value)` observes input, chooses and executes an action, evaluates it, learns, updates state, and returns the cycle result.

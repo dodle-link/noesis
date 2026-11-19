@@ -52,6 +52,7 @@ MAGIC = b"DODL"
 HEADER_SIZE = 16
 PIXEL_INPUT_SIZE = 8
 PIXEL_OUTPUT_SIZE = 2
+ACTION_LABELS = ("rest", "explore", "learn", "observe")
 
 
 def clamp(value, minimum, maximum):
@@ -347,6 +348,179 @@ def _pixel_validation_metrics(network, examples):
     }
 
 
+def _action_policy_target(energy, curiosity, confidence):
+    if energy < 20:
+        return "rest"
+    if curiosity > 70:
+        return "explore"
+    if confidence < 40:
+        return "learn"
+    return "observe"
+
+
+def _action_policy_example(energy, curiosity, confidence, stability=80):
+    inputs = array("f", [0]) * CONFIG["INPUT_SIZE"]
+    inputs[0] = energy / 100
+    inputs[1] = curiosity / 100
+    inputs[2] = confidence / 100
+    inputs[3] = stability / 100
+    return inputs, _action_policy_target(energy, curiosity, confidence)
+
+
+def _action_policy_validation_examples():
+    return [
+        _action_policy_example(energy, curiosity, confidence)
+        for energy in (0, 19, 20, 50, 100)
+        for curiosity in (0, 70, 71, 100)
+        for confidence in (0, 39, 40, 60, 100)
+    ]
+
+
+def _action_policy_metrics(network, examples):
+    correct = 0
+    squared_error = 0.0
+    class_totals = {label: 0 for label in ACTION_LABELS}
+    class_correct = {label: 0 for label in ACTION_LABELS}
+    for inputs, target in examples:
+        target_index = ACTION_LABELS.index(target)
+        outputs = network.forward(inputs)["output"]
+        prediction = ACTION_LABELS[max(range(len(ACTION_LABELS)), key=lambda index: outputs[index])]
+        if prediction == target:
+            correct += 1
+            class_correct[target] += 1
+        class_totals[target] += 1
+        for index, output in enumerate(outputs[: len(ACTION_LABELS)]):
+            expected = 1.0 if index == target_index else 0.0
+            squared_error += (output - expected) ** 2
+    sample_count = len(examples)
+    return {
+        "accuracy": correct / sample_count,
+        "baseline_accuracy": sum(class_totals[label] for label in ACTION_LABELS if label == "observe") / sample_count,
+        "mse": squared_error / (sample_count * len(ACTION_LABELS)),
+        "per_action_accuracy": {
+            label: class_correct[label] / class_totals[label]
+            if class_totals[label]
+            else 0.0
+            for label in ACTION_LABELS
+        },
+    }
+
+
+def _network_from_model(model):
+    stored = model["network"]
+    network = TinyNetwork(Random(1))
+    network.input_size = stored["inputSize"]
+    network.hidden_size = stored["hiddenSize"]
+    network.output_size = stored["outputSize"]
+    network.weights1 = stored["weights1"]
+    network.bias1 = stored["bias1"]
+    network.weights2 = stored["weights2"]
+    network.bias2 = stored["bias2"]
+    return network
+
+
+def evaluate_action_model(model):
+    """Score a model on the fixed action-policy validation scenarios."""
+    if not isinstance(model, dict):
+        model = load_model_file(model)
+    network = _network_from_model(model)
+    if network.output_size < len(ACTION_LABELS):
+        raise ValueError("Action models must have at least four output values.")
+    metrics = _action_policy_metrics(network, _action_policy_validation_examples())
+    metrics["policy_trained"] = bool(model["network"].get("policyTrained", False))
+    return metrics
+
+
+def train_action_model(
+    path="noe-action-model.dodl",
+    sample_count=1200,
+    epochs=20,
+    seed=None,
+    patience=5,
+    metrics_callback=None,
+):
+    if not isinstance(sample_count, int) or isinstance(sample_count, bool) or sample_count < 1:
+        raise ValueError("sample_count must be a positive integer.")
+    if not isinstance(epochs, int) or isinstance(epochs, bool) or epochs < 1:
+        raise ValueError("epochs must be a positive integer.")
+    if not isinstance(patience, int) or isinstance(patience, bool) or patience < 1:
+        raise ValueError("patience must be a positive integer.")
+    if metrics_callback is not None and not callable(metrics_callback):
+        raise ValueError("metrics_callback must be callable.")
+
+    random = Random(seed if seed is not None else random_int(1, 0xFFFFFFFF))
+    model = create_model()
+    network = TinyNetwork(random)
+    network.input_size = CONFIG["INPUT_SIZE"]
+    network.hidden_size = CONFIG["HIDDEN_SIZE"]
+    network.output_size = len(ACTION_LABELS)
+    network.weights1 = array("f", [0]) * (network.input_size * network.hidden_size)
+    network.bias1 = array("f", [0]) * network.hidden_size
+    network.weights2 = array("f", [0]) * (network.hidden_size * network.output_size)
+    network.bias2 = array("f", [0]) * network.output_size
+    network.initialize(random)
+    for hidden_index in range(network.hidden_size):
+        start = hidden_index * network.input_size
+        for input_index in range(4, network.input_size):
+            network.weights1[start + input_index] = 0
+
+    examples = [
+        _action_policy_example(
+            random.float(0, 100),
+            random.float(0, 100),
+            random.float(0, 100),
+        )
+        for _ in range(sample_count)
+    ]
+    validation_examples = _action_policy_validation_examples()
+    best_score = (-1.0, float("inf"))
+    best_weights = None
+    stale_epochs = 0
+    for epoch in range(1, epochs + 1):
+        for index in range(sample_count - 1, 0, -1):
+            swap_index = int(random.next() * (index + 1))
+            examples[index], examples[swap_index] = examples[swap_index], examples[index]
+        for inputs, label in examples:
+            targets = array("f", [0]) * len(ACTION_LABELS)
+            targets[ACTION_LABELS.index(label)] = 1
+            network.learn(inputs, targets, 0.03)
+        metrics = _action_policy_metrics(network, validation_examples)
+        if metrics_callback is not None:
+            metrics_callback(epoch, metrics)
+        score = (metrics["accuracy"], -metrics["mse"])
+        if score > best_score:
+            best_score = score
+            best_weights = {
+                key: array("f", getattr(network, key))
+                for key in ("weights1", "bias1", "weights2", "bias2")
+            }
+            stale_epochs = 0
+        else:
+            stale_epochs += 1
+            if stale_epochs >= patience:
+                break
+
+    for key, values in best_weights.items():
+        setattr(network, key, values)
+
+    model["randomSeed"] = random.seed
+    model["network"] = {
+        "inputSize": network.input_size,
+        "hiddenSize": network.hidden_size,
+        "outputSize": network.output_size,
+        "weights1": network.weights1,
+        "bias1": network.bias1,
+        "weights2": network.weights2,
+        "bias2": network.bias2,
+        "policyTrained": True,
+    }
+    with open(path, "wb") as model_file:
+        model_file.write(serialize_model(model))
+    gguf_path = os.path.splitext(os.fsdecode(path))[0] + ".F32.gguf"
+    create_gguf_model_file(gguf_path, model)
+    return model
+
+
 def train_pixel_model(
     path="noe-pixel-model.dodl",
     sample_count=1200,
@@ -604,6 +778,7 @@ def create_model():
             "bias1": network.bias1,
             "weights2": network.weights2,
             "bias2": network.bias2,
+            "policyTrained": False,
         },
         "memory": [],
         "rules": create_initial_rules(),
@@ -762,6 +937,10 @@ def merge_models(model_a, model_b, alpha=0.5):
             "f",
             ((1 - alpha) * value_a + alpha * value_b for value_a, value_b in zip(values_a, values_b)),
         )
+    merged["network"]["policyTrained"] = bool(
+        network_a.get("policyTrained", False)
+        and network_b.get("policyTrained", False)
+    )
 
     return merged
 
@@ -787,6 +966,8 @@ def validate_model(model):
     if any(not isinstance(size, int) or isinstance(size, bool) or size <= 0 for size in shape):
         raise ValueError("Invalid network shape.")
     input_size, hidden_size, output_size = shape
+    if "policyTrained" in network and not isinstance(network["policyTrained"], bool):
+        raise ValueError("Model network policyTrained must be a boolean.")
     expected_lengths = {
         "weights1": input_size * hidden_size,
         "bias1": hidden_size,
@@ -831,6 +1012,7 @@ def serialize_model(model):
             "hiddenSize": network["hiddenSize"],
             "outputSize": network["outputSize"],
         },
+        "policyTrained": bool(network.get("policyTrained", False)),
     }
     metadata_bytes = json.dumps(metadata, separators=(",", ":"), allow_nan=False).encode("utf-8")
     network_bytes = b"".join(
@@ -957,6 +1139,7 @@ def deserialize_model(buffer):
             "bias1": arrays[1],
             "weights2": arrays[2],
             "bias2": arrays[3],
+            "policyTrained": metadata.get("policyTrained", False),
         },
         "memory": metadata["memory"],
         "rules": metadata["rules"],
@@ -997,6 +1180,7 @@ class AIEngine:
         self.network.bias1 = stored_network["bias1"]
         self.network.weights2 = stored_network["weights2"]
         self.network.bias2 = stored_network["bias2"]
+        self.policy_trained = bool(stored_network.get("policyTrained", False))
         self.memory = MemoryStore(self.model["memory"])
         self.rules = RuleEngine(self.model["rules"])
         self.behavior = BehaviorEngine(self.model["behavior"])
@@ -1136,6 +1320,15 @@ class AIEngine:
                 return {"type": "learn", "ruleId": None}
             if workspace.get("goal") == "explore" and signals["novelty"] >= 0.7:
                 return {"type": "explore", "ruleId": None}
+        if rule and rule["action"]["type"] != "observe":
+            return {"type": rule["action"]["type"], "ruleId": rule["id"]}
+        if self.policy_trained and self.network.output_size >= len(ACTION_LABELS):
+            inputs = self.encode_input(perception["input"])
+            outputs = self.network.forward(inputs)["output"]
+            action_index = max(
+                range(len(ACTION_LABELS)), key=lambda index: outputs[index]
+            )
+            return {"type": ACTION_LABELS[action_index], "ruleId": None}
         if rule:
             return {"type": rule["action"]["type"], "ruleId": rule["id"]}
         return {"type": self.behavior.run(self.state), "ruleId": None}
@@ -1199,8 +1392,9 @@ class AIEngine:
     def learn(self, evaluation, input_vector=None):
         if input_vector is None:
             input_vector = self.encode_input(evaluation["perception"]["input"])
-        target = array("f", [evaluation["reward"]]) * self.network.output_size
-        self.network.learn(input_vector, target, CONFIG["LEARNING_RATE"])
+        if not self.policy_trained:
+            target = array("f", [evaluation["reward"]]) * self.network.output_size
+            self.network.learn(input_vector, target, CONFIG["LEARNING_RATE"])
         action = evaluation["action"]
         if action["ruleId"]:
             self.rules.reward(action["ruleId"], evaluation["reward"])
@@ -1326,20 +1520,49 @@ class AIEngine:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create or train a Noesis model.")
-    parser.add_argument(
+    training_modes = parser.add_mutually_exclusive_group()
+    training_modes.add_argument(
         "--train-pixel",
         action="store_true",
         help="Train a pixel steering model and write noe-pixel-model.dodl.",
+    )
+    training_modes.add_argument(
+        "--train-actions",
+        action="store_true",
+        help="Train an action-selection model and write noe-action-model.dodl.",
     )
     parser.add_argument("--samples", type=int, default=1200)
     parser.add_argument("--epochs", type=int, default=12)
     parser.add_argument("--patience", type=int, default=4)
     parser.add_argument("--seed", type=int)
-    parser.add_argument("--output", default="noe-pixel-model.dodl")
+    parser.add_argument("--output")
     arguments = parser.parse_args()
 
     output_path = "noe-model.dodl"
-    if arguments.train_pixel:
+    if arguments.train_actions:
+        output_path = arguments.output or "noe-action-model.dodl"
+
+        def report_action_metrics(epoch, metrics):
+            print(
+                f"epoch {epoch}: validation_accuracy={metrics['accuracy']:.3f} "
+                f"baseline_accuracy={metrics['baseline_accuracy']:.3f} "
+                f"validation_mse={metrics['mse']:.6f}"
+            )
+
+        train_action_model(
+            output_path,
+            sample_count=arguments.samples,
+            epochs=arguments.epochs,
+            seed=arguments.seed,
+            patience=arguments.patience,
+            metrics_callback=report_action_metrics,
+        )
+        print(f"Action model trained: {output_path}")
+        gguf_output_path = os.path.splitext(output_path)[0] + ".F32.gguf"
+        print(f"GGUF model file created: {gguf_output_path}")
+    elif arguments.train_pixel:
+        output_path = arguments.output or "noe-pixel-model.dodl"
+
         def report_metrics(epoch, metrics):
             print(
                 f"epoch {epoch}: validation_mse={metrics['mse']:.6f} "
