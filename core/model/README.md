@@ -7,28 +7,24 @@ tags:
 ---
 # Core Model
 
-`me.py` is a small, stateful AI model built with Python's standard library. It combines a neural network with goals, memory, rules, and a behavior program.
+`me.py` contains a small Python model that keeps state between steps. It combines a neural network with rules, goals, memory, and a simple behavior program. An optional language-model provider can write replies, but the local model still chooses its actions.
 
-This guide starts with the basics, then covers training, model files, and optional integrations. It also distinguishes what the software does today from the ideas it uses as inspiration.
+## Files in this folder
 
-## Code layout
-
-- `me.py` is the Python model implementation and command-line entry point. It defines the neural network, model state, memory, goals, rules, behavior interpreter, action and pixel training, DODL/GGUF serialization, and `AIEngine`.
-- `model_providers.py` contains the HTTP adapters for OpenAI, Gemini, OpenAI-compatible endpoints, and remote biocomputation services. It does not store provider credentials in model files.
-- `index.html` and `me.js` make up the browser pixel demo. The page loads the trained pixel controller from `noe-pixel-model.dodl`; it is separate from the stateful Python agent.
-- `noe-model.dodl` and `noe-model.F32.gguf` are the default stateful model files. `noe-pixel-model.dodl` and `noe-pixel-model.F32.gguf` are for the pixel controller. The DODL files contain model metadata and weights, while the GGUF files contain the network tensors.
-
-For the Python agent, a cycle encodes the input and state, observes it, selects an action using rules, eligible goals, the trained action policy, or the behavior program, then executes, evaluates, learns, and updates the saved model state. The browser demo uses only the pixel network for steering and falls back to built-in steering when the model cannot be loaded.
+- `me.py` implements the Python model, training commands, and DODL/GGUF file support.
+- `model_providers.py` connects to OpenAI, Gemini, OpenAI-compatible APIs, and remote biocomputation services.
+- `index.html` and `me.js` run the browser-based pixel demo. This demo uses its own steering model; it is separate from the Python agent.
+- `noe-model.dodl` and `noe-model.F32.gguf` are the default Python model files. The `noe-pixel-model` files belong to the pixel demo.
 
 ## Quick start
 
-Create the default model files from this directory:
+From this directory, create the default model files:
 
 ```bash
 python3 me.py
 ```
 
-This writes `noe-model.dodl` and `noe-model.F32.gguf` in the current directory. Load the DODL file and run one model step like this:
+Load the DODL file and run one step:
 
 ```python
 from me import AIEngine, deserialize_model
@@ -41,108 +37,66 @@ result = engine.step({"type": "user_input", "value": "hello"})
 print(result["action"])
 ```
 
-## How the model works
+The engine updates its state as it runs. Save the latest state with `engine.export_model()` when you want to keep those updates.
 
-Explicit rest/explore rules and eligible workspace-guided goals take priority. Ordinary models retain the existing rule and behavior-program policy. An action-trained model uses four neural outputs (`rest`, `explore`, `learn`, and `observe`) to choose an action when those higher-priority rules do not decide it. Older model files remain untrained and keep their existing behavior.
+## How it works
 
-Each step saves a workspace snapshot with the input focus, active goal, intention, predicted state, observed outcome, and prediction error. This is a practical self-monitoring trace, not evidence that the model has subjective experience. When the default `observe` action would otherwise be chosen, an active `learn` goal can guide the model to learn instead.
+Each step reads the input and current state, chooses an action, runs it, and updates the model. Rules and eligible goals can take priority. A model trained with `--train-actions` can use its network to choose among `rest`, `explore`, `learn`, and `observe`. Untrained models keep their existing rules and behavior.
 
-The model tracks `bioSignals` named `novelty`, `stress`, `recovery`, and `arousal`. These bounded software variables can influence exploration and learning. They are biological analogies, not chemical measurements or biological computation. The model also does not simulate quantum effects or establish consciousness.
+The engine also records a workspace snapshot: what it focused on, which goal was active, what it expected, and what happened. This is a software trace, not evidence of subjective experience. Values such as `novelty`, `stress`, `recovery`, and `arousal` are bounded software signals. They are not biological measurements, and the model does not simulate quantum effects or establish consciousness.
 
-## Train the action policy
+## Training
 
-Train the Python engine's action policy from `core/model/`:
+### Action policy
+
+From this directory, train the Python model's action policy:
 
 ```bash
 python3 me.py --train-actions --seed 123
 ```
 
-This writes `noe-action-model.dodl` and its GGUF companion. Training uses a deterministic synthetic policy and a separate, fixed 100-scenario validation set. Each epoch reports validation accuracy, the always-`observe` baseline, and mean squared error; the best checkpoint is kept and training stops after `--patience` epochs without improvement. Use `--samples`, `--epochs`, and `--patience` to adjust the run, or `--output` to choose another path. Reusing the same seed and options produces the same trained weights and metrics. The DODL file marks the policy as trained; the engine then uses its action scores while preserving explicit rule and goal overrides.
+The command writes `noe-action-model.dodl` and a GGUF companion. It trains on a generated policy and checks progress against a fixed set of 100 validation scenarios. It keeps the best checkpoint and stops when validation accuracy no longer improves. Use `--samples`, `--epochs`, and `--patience` to adjust training, `--output` to choose a file path, and `--seed` to make a run repeatable. The engine uses the trained policy unless a rule or eligible goal takes priority.
 
-Live Preview: [noesis.dodle.link/model](https://noesis.dodle.link/model/)
+### Pixel controller
 
-## Create a model file
-
-Run the script from the `core/model/` directory:
-
-```bash
-python3 me.py
-```
-
-The `F32` suffix identifies the GGUF file's float32 tensor type. DODL stores the complete model, including its state, memory, rules, behavior, and network. GGUF stores the network's four float32 tensors, architecture dimensions, and workspace format/version markers. It uses the custom `noesis` architecture and requires a compatible runtime. Live workspace state stays in DODL.
-
-`create_model_file(path)` is also available when creating a model from Python; it writes the binary DODL format and returns the model object. Pass that model to `create_gguf_model_file(path, model)` to write the matching GGUF file.
-
-The path may be a string or another path-like value. Its parent directory must already exist. The file is binary; open it with `"rb"` when reading.
-
-## Train the pixel controller
-
-The pixel demo also uses DODL, but has a network specialized for steering. It takes eight normalized inputs (pixel position and velocity, pointer offset and presence, and excitement) and produces two steering outputs. Train it from `core/model/`:
+The browser demo has a separate network that steers a pixel using its position, velocity, pointer position, and excitement level. Train it with:
 
 ```bash
 python3 me.py --train-pixel
 ```
 
-This writes `noe-pixel-model.dodl` and leaves `noe-model.dodl` untouched. Training uses a built-in steering policy that moves away from a nearby pointer and screen edges. Each epoch is scored on separate synthetic validation examples; the command reports validation MSE and per-axis MAE, keeps the best weights, and stops after `--patience` epochs without improvement. Use `--samples`, `--epochs`, and `--patience` to adjust training, `--seed` to make it repeatable, or `--output` to choose another path. The browser only runs the trained model; it does not train it.
+This writes `noe-pixel-model.dodl` without changing `noe-model.dodl`. Training reports validation error and keeps the best weights. You can also use `--samples`, `--epochs`, `--patience`, `--seed`, and `--output` to adjust the run. The browser runs the saved model; it does not train it.
 
-Serve `core/model/` over HTTP so the browser can load the model:
+To try the browser demo, serve this folder over HTTP:
 
 ```bash
 python3 -m http.server 8000
 ```
 
-Open `http://localhost:8000/`. The page loads `me.js`, which fetches `noe-pixel-model.dodl`. If the file is missing or has the wrong model type, the demo uses its built-in steering behavior instead.
+Then open `http://localhost:8000/`. The demo loads `noe-pixel-model.dodl`. If the file is missing or invalid, it uses built-in steering instead.
 
-## Load and use a model
+You can also try the [live demo](https://noesis.dodle.link/model/).
 
-Load the saved model into `AIEngine`:
+## Model files
 
-```python
-from me import AIEngine, deserialize_model
+DODL stores the full model: its state, memory, rules, behavior, and network. GGUF stores the network tensors and dimensions, but not the live model state. The `F32` suffix means the GGUF tensors use 32-bit floating-point values. The GGUF file uses Noesis' custom `noesis` architecture and needs a compatible runtime.
 
-with open("noe-model.dodl", "rb") as model_file:
-    model = deserialize_model(model_file.read())
+The files are binary, not text or JSON. The serializer and loader support files up to 1 MiB and check the file version, dimensions, tensor lengths, and values. Use `create_model_file(path)` to write a DODL model, or pass its returned model to `create_gguf_model_file(path, model)` to write the matching GGUF file. The destination folder must already exist.
 
-engine = AIEngine(model)
-result = engine.step({"type": "user_input", "value": "hello"})
-print(result["action"])
-```
+## Use a language model for replies
 
-`AIEngine.import_model(data)` loads a model from serialized bytes. `AIEngine.export_model()` returns the current model as bytes, which you can save to keep the latest state:
+`LLMProvider` can request replies from OpenAI, Gemini, or an OpenAI-compatible server. It uses Python's standard library, so you do not need a provider SDK. Provider settings and API keys are read at runtime and are never saved in the model file.
 
-```python
-with open("noe-model.dodl", "wb") as model_file:
-    model_file.write(engine.export_model())
-```
-
-## Merge compatible models
-
-`merge_models(model_a, model_b, alpha=0.5)` interpolates corresponding network parameters. `alpha=0` keeps model A's parameters, `alpha=1` uses model B's, and values in between blend the two. Model B defines the merged network architecture; when dimensions differ, overlapping parameters from model A are mapped by index and any additional dimensions retain model B's parameters. The merged model keeps model A's state, rules, memory, behavior, and goals, while receiving a new ID and timestamps.
-
-Pass DODL model dictionaries or supported model-file paths, merge them, then serialize the result:
-
-```python
-from me import merge_models, serialize_model
-
-merged = merge_models("model-a.dodl", "model-b.onnx", alpha=0.5)
-with open("merged-model.dodl", "wb") as model_file:
-    model_file.write(serialize_model(merged))
-```
-
-ONNX loading requires `pip install onnx` and supports a graph consisting of `Gemm → Relu → Gemm` with weights and biases stored as initializers. The imported ONNX dimensions are preserved in the merged DODL model. This merges weights and biases only; it does not combine memories, rules, or other model metadata. Direct parameter averaging may work poorly for independently trained networks, even when their shapes match.
-
-## Generate a reply with an external model
-
-`LLMProvider` sends the input, current state, and up to five recent memories to OpenAI, Gemini, or an OpenAI-compatible endpoint. It uses Python's standard library, so no provider SDK is required. Credentials and endpoint configuration are runtime-only and are never stored in the DODL file:
+For OpenAI, set:
 
 ```bash
-export NOESIS_PROVIDER=openai  # or gemini
+export NOESIS_PROVIDER=openai
 export OPENAI_API_KEY=your-api-key
 ```
 
-For Gemini, set `GEMINI_API_KEY` instead. `NOESIS_PROVIDER` defaults to `openai`. The default models are `gpt-4o-mini` and `gemini-2.0-flash`; override them with `OPENAI_MODEL` or `GEMINI_MODEL` if needed.
+For Gemini, set `NOESIS_PROVIDER=gemini` and `GEMINI_API_KEY`. The default models are `gpt-4o-mini` and `gemini-2.0-flash`; set `OPENAI_MODEL` or `GEMINI_MODEL` to use another model.
 
-For a local server with an OpenAI-compatible API, such as Ollama or vLLM, configure:
+For a local OpenAI-compatible server, such as Ollama, set:
 
 ```bash
 export NOESIS_PROVIDER=openai-compatible
@@ -150,7 +104,7 @@ export NOESIS_BASE_URL=http://localhost:11434/v1
 export NOESIS_MODEL=llama3.2
 ```
 
-`NOESIS_API_KEY` is optional for local servers and can be set when the endpoint requires a key. Pass `base_url` directly to `LLMProvider` to override the environment setting.
+`NOESIS_API_KEY` is optional for local servers. Set it if your server requires a key.
 
 ```python
 from me import AIEngine, LLMProvider
@@ -158,77 +112,67 @@ from me import AIEngine, LLMProvider
 with open("noe-model.dodl", "rb") as model_file:
     engine = AIEngine.import_model(model_file.read())
 
-provider = LLMProvider()  # Reads NOESIS_PROVIDER and the matching API key
-result = engine.respond({"type": "user_input", "value": "Hello!"}, provider)
+result = engine.respond(
+    {"type": "user_input", "value": "Hello!"},
+    LLMProvider(),
+)
 print(result["reply"])
 
 with open("noe-model.dodl", "wb") as model_file:
     model_file.write(engine.export_model())
 ```
 
-`respond()` asks the provider for a reply and structured analysis, then runs one local engine step. The analysis is bounded and stored in the workspace as `providerAnalysis`, where it is included in the cycle broadcast. Providers that only implement the older `generate()` method remain supported and produce no analysis. The provider does not choose the engine's action; local rules and behavior remain in control. This self-monitoring architecture is not evidence of subjective experience. `LLMProviderError` is raised for provider request or response errors.
+The provider writes the reply and may return a short analysis. The local engine still chooses and runs the action. Provider request failures raise `LLMProviderError`.
 
-## Connect a biological-computation platform
+## Connect a biocomputation service
 
-`BiocomputationProvider` lets Noesis send a task to a lab or vendor service that performs computation using a biological system. Noesis does not perform that computation itself, synthesize DNA, or control lab equipment. The remote service is responsible for translating Noesis tasks into operations its platform supports.
+`BiocomputationProvider` sends a task to a remote service. Noesis does not perform biological computation, synthesize DNA, or control lab equipment. The remote service must translate the task into operations supported by its platform.
 
-The provider sends a JSON `POST` request in this format:
+Set `NOESIS_BIOCOMPUTE_URL` and, if needed, `NOESIS_BIOCOMPUTE_API_KEY`. Remote URLs must use HTTPS; HTTP is allowed for localhost development. The key is sent as a bearer token and is not stored in the model. Requests time out after 30 seconds by default and are not retried, to avoid accidentally submitting a task twice.
+
+The request is JSON and must include a non-empty operation:
 
 ```json
 {
-    "protocol": "noesis-biocompute/v1",
-    "task": {"operation": "your-platform-operation", "inputs": {"value": 1}}
+  "protocol": "noesis-biocompute/v1",
+  "task": {"operation": "your-platform-operation", "inputs": {"value": 1}}
 }
 ```
 
-`operation` must be a non-empty string, and `inputs`, when provided, must be an object. The service must return standard JSON with the same `protocol` and a `result` field; `result` may be any JSON value. If supplied, the response content type must be `application/json` or use a `+json` media type. It can also include string-valued `provider` and `run_id` fields to identify the service and run. Set `NOESIS_BIOCOMPUTE_URL` and, if needed, `NOESIS_BIOCOMPUTE_API_KEY`. Remote endpoints must use HTTPS; HTTP is allowed for localhost development. Redirects are followed only when they remain on the same origin. Requests are not retried automatically because a repeated task could cause duplicate computation. The request timeout defaults to 30 seconds and must be a positive finite number. The API key is sent as a bearer token and is never saved in the model file.
+The service must return JSON with the same protocol and a `result` field. The `inputs` value must be an object. This call is explicit and does not change model state:
 
 ```python
 from me import AIEngine, BiocomputationProvider
 
 engine = AIEngine()
-provider = BiocomputationProvider()  # Reads the URL and optional API key from the environment
 result = engine.compute_biological(
-        {"operation": "your-platform-operation", "inputs": {"value": 1}},
-        provider=provider,
+    {"operation": "your-platform-operation", "inputs": {"value": 1}},
+    provider=BiocomputationProvider(),
 )
 print(result["result"])
 ```
 
-This call is explicit and does not change model state. The protocol is a transport contract, not a standard format for biological computation. Your platform needs an adapter that understands its operations and results. Validate the integration for your platform and follow appropriate lab safety procedures before connecting it to biological processes or equipment.
+This protocol only describes how to send and receive a task; it is not a standard for biological computation. You need a service adapter for your platform. Review its safety requirements before connecting it to biological processes or equipment.
 
-## Model format and limits
+## Merge models
 
-The file starts with the `DODL` magic signature and a versioned header. It stores JSON metadata followed by the neural network's float32 arrays. The format is intended for this module's serializer and deserializer; it is not a JSON document.
+`merge_models(model_a, model_b, alpha=0.5)` blends network weights. An `alpha` of `0` keeps model A's weights; `1` uses model B's. Model B supplies the output architecture. The result keeps model A's state, rules, memory, behavior, and goals. Merging weights does not merge those parts of the models, and averaging independently trained networks may reduce their quality.
 
-`serialize_model()` validates the memory, rule, and behavior limits, requires positive network dimensions and matching tensor lengths, and rejects non-finite tensor values. It rejects files larger than 1 MiB. `deserialize_model()` checks the signature, format version, metadata version, positive network dimensions, tensor lengths, and payload size; files larger than 1 MiB are rejected.
+You can pass DODL models or supported model paths. ONNX loading requires `pip install onnx` and supports a `Gemm -> Relu -> Gemm` network with weights and biases stored as initializers.
 
 ## Main API
 
-- `create_model()` returns a fresh model in memory.
-- `create_model_file(path)` creates a fresh model and writes it to `path`.
-- `serialize_model(model)` converts a model to DODL bytes.
-- `deserialize_model(data)` converts DODL bytes back to a model.
-- `serialize_gguf_model(model)` converts the network tensors to GGUF v3 bytes.
-- `create_gguf_model_file(path, model)` writes those GGUF bytes to `path`.
-- `train_action_model(path, sample_count, epochs, seed, patience)` trains and saves a four-action policy.
-- `evaluate_action_model(model)` reports fixed-set accuracy, per-action accuracy, baseline accuracy, and MSE.
-- `merge_models(model_a, model_b, alpha=0.5)` blends compatible models' network parameters.
-- `AIEngine(model=None)` runs and updates a model; without an argument it creates a fresh one.
-- `AIEngine.step(input_value)` observes input, chooses and executes an action, evaluates it, learns, updates state, and returns the cycle result.
-- `LLMProvider(provider=None)` configures an OpenAI, Gemini, or OpenAI-compatible text-generation adapter from environment variables.
-- `AIEngine.respond(input_value, provider=None)` generates a provider reply and runs one local engine step.
-- `BiocomputationProvider(endpoint=None, api_key=None, timeout=30)` submits explicit tasks to a remote biocomputation service.
-- `AIEngine.compute_biological(task, provider=None)` submits a task without changing model state.
-- `AIEngine.export_model()` serializes the engine's current model.
+- `create_model()` creates a model in memory; `create_model_file(path)` also writes it to disk.
+- `serialize_model(model)` and `deserialize_model(data)` convert to and from DODL bytes.
+- `serialize_gguf_model(model)` and `create_gguf_model_file(path, model)` write GGUF data.
+- `AIEngine(model=None)` runs a model. `step(input_value)` performs one cycle, and `export_model()` returns the updated model as bytes.
+- `train_action_model(...)` trains an action policy; `evaluate_action_model(model)` reports its validation results.
+- `merge_models(model_a, model_b, alpha=0.5)` blends network weights.
+- `LLMProvider(...)` configures a text-generation service; `AIEngine.respond(...)` requests a reply and runs one local cycle.
+- `BiocomputationProvider(...)` configures a remote service; `AIEngine.compute_biological(...)` submits a task without changing model state.
 
-## License
+## License and contributing
 
-Noesis is released under the [MIT License](https://huggingface.co/dodle/noesis/blob/main/LICENSE). Individual components
-also include their own license files where applicable.
+Noesis is released under the [MIT License](LICENSE). Some components include their own license files.
 
-## Contributing
-
-To contribute, create a focused change in the relevant component, update its
-documentation when behavior changes, and run that component's existing checks
-before opening a pull request.
+When changing this component, update the documentation if behavior changes and run the relevant checks before opening a pull request.
