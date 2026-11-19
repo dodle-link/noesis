@@ -1022,6 +1022,21 @@ class AIEngine:
             value = input_value.get("value")
             if isinstance(value, str) and len(vector) > 4:
                 vector[4] = min(len(value) / 100, 1)
+                feature_start = 7
+                feature_count = len(vector) - feature_start
+                if feature_count > 0:
+                    for token in value.lower().split():
+                        token_hash = 2166136261
+                        for byte in token.encode("utf-8"):
+                            token_hash = ((token_hash ^ byte) * 16777619) & 0xFFFFFFFF
+                        bucket = token_hash % feature_count
+                        sign = 1 if token_hash & 0x80000000 else -1
+                        vector[feature_start + bucket] += sign
+                    feature_values = vector[feature_start:]
+                    magnitude = max((abs(value) for value in feature_values), default=0)
+                    if magnitude > 1:
+                        for index in range(feature_start, len(vector)):
+                            vector[index] /= magnitude
             if input_value.get("type") == "user_input" and len(vector) > 5:
                 vector[5] = 1
         if len(vector) > 6:

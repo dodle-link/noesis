@@ -68,6 +68,18 @@ class ModelFileTests(unittest.TestCase):
         self.assertEqual(learned_inputs[0], expected_input)
         self.assertNotEqual(learned_inputs[0][0], engine.state["energy"] / 100)
 
+    def test_encode_input_includes_repeatable_text_features(self):
+        engine = self.model_module.AIEngine()
+        first = {"type": "user_input", "value": "cats are kind"}
+        second = {"type": "user_input", "value": "dogs are kind"}
+
+        first_vector = list(engine.encode_input(first))
+        second_vector = list(engine.encode_input(second))
+
+        self.assertNotEqual(first_vector, second_vector)
+        self.assertEqual(first_vector, list(engine.encode_input(first)))
+        self.assertTrue(all(-1 <= value <= 1 for value in first_vector[7:]))
+
     def test_memory_limit_evicts_low_importance_without_reordering_recent_items(self):
         memory = self.model_module.MemoryStore()
         with patch.dict(self.model_module.CONFIG, {"MEMORY_LIMIT": 3}):
