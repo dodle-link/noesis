@@ -11,6 +11,15 @@ tags:
 
 This guide starts with the basics, then covers training, model files, and optional integrations. It also distinguishes what the software does today from the ideas it uses as inspiration.
 
+## Code layout
+
+- `me.py` is the Python model implementation and command-line entry point. It defines the neural network, model state, memory, goals, rules, behavior interpreter, action and pixel training, DODL/GGUF serialization, and `AIEngine`.
+- `model_providers.py` contains the HTTP adapters for OpenAI, Gemini, OpenAI-compatible endpoints, and remote biocomputation services. It does not store provider credentials in model files.
+- `index.html` and `me.js` make up the browser pixel demo. The page loads the trained pixel controller from `noe-pixel-model.dodl`; it is separate from the stateful Python agent.
+- `noe-model.dodl` and `noe-model.F32.gguf` are the default stateful model files. `noe-pixel-model.dodl` and `noe-pixel-model.F32.gguf` are for the pixel controller. The DODL files contain model metadata and weights, while the GGUF files contain the network tensors.
+
+For the Python agent, a cycle encodes the input and state, observes it, selects an action using rules, eligible goals, the trained action policy, or the behavior program, then executes, evaluates, learns, and updates the saved model state. The browser demo uses only the pixel network for steering and falls back to built-in steering when the model cannot be loaded.
+
 ## Quick start
 
 Create the default model files from this directory:
