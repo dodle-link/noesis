@@ -376,6 +376,15 @@ def _action_policy_validation_examples():
     ]
 
 
+def _action_policy_held_out_examples():
+    return [
+        _action_policy_example(energy, curiosity, confidence)
+        for energy in (5, 15, 35, 65, 90)
+        for curiosity in (10, 65, 75, 90)
+        for confidence in (10, 35, 45, 75, 95)
+    ]
+
+
 def _action_policy_metrics(network, examples):
     correct = 0
     squared_error = 0.0
@@ -403,6 +412,7 @@ def _action_policy_metrics(network, examples):
             else 0.0
             for label in ACTION_LABELS
         },
+        "per_action_support": class_totals,
     }
 
 
@@ -420,13 +430,16 @@ def _network_from_model(model):
 
 
 def evaluate_action_model(model):
-    """Score a model on the fixed action-policy validation scenarios."""
+    """Score a model on validation and separate held-out policy scenarios."""
     if not isinstance(model, dict):
         model = load_model_file(model)
     network = _network_from_model(model)
     if network.output_size < len(ACTION_LABELS):
         raise ValueError("Action models must have at least four output values.")
     metrics = _action_policy_metrics(network, _action_policy_validation_examples())
+    metrics["held_out"] = _action_policy_metrics(
+        network, _action_policy_held_out_examples()
+    )
     metrics["policy_trained"] = bool(model["network"].get("policyTrained", False))
     return metrics
 
@@ -1543,19 +1556,33 @@ if __name__ == "__main__":
         output_path = arguments.output or "noe-action-model.dodl"
 
         def report_action_metrics(epoch, metrics):
+            action_accuracy = " ".join(
+                f"{label}={accuracy:.3f}"
+                for label, accuracy in metrics["per_action_accuracy"].items()
+            )
             print(
                 f"epoch {epoch}: validation_accuracy={metrics['accuracy']:.3f} "
                 f"baseline_accuracy={metrics['baseline_accuracy']:.3f} "
-                f"validation_mse={metrics['mse']:.6f}"
+                f"validation_mse={metrics['mse']:.6f} "
+                f"per_action_accuracy[{action_accuracy}]"
             )
 
-        train_action_model(
+        model = train_action_model(
             output_path,
             sample_count=arguments.samples,
             epochs=arguments.epochs,
             seed=arguments.seed,
             patience=arguments.patience,
             metrics_callback=report_action_metrics,
+        )
+        held_out_metrics = evaluate_action_model(model)["held_out"]
+        held_out_accuracy = " ".join(
+            f"{label}={accuracy:.3f}"
+            for label, accuracy in held_out_metrics["per_action_accuracy"].items()
+        )
+        print(
+            f"held_out_accuracy={held_out_metrics['accuracy']:.3f} "
+            f"per_action_accuracy[{held_out_accuracy}]"
         )
         print(f"Action model trained: {output_path}")
         gguf_output_path = os.path.splitext(output_path)[0] + ".F32.gguf"

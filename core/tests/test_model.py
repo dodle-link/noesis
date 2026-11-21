@@ -3,6 +3,7 @@ import io
 import json
 import math
 import os
+import shutil
 import struct
 import subprocess
 import sys
@@ -112,6 +113,13 @@ class ModelFileTests(unittest.TestCase):
                 )
             )
         self.assertEqual(metrics_a, metrics_b)
+        validation = {
+            (tuple(inputs), label)
+            for inputs, label in self.model_module._action_policy_validation_examples()
+        }
+        held_out_examples = self.model_module._action_policy_held_out_examples()
+        held_out = {(tuple(inputs), label) for inputs, label in held_out_examples}
+        self.assertFalse(validation & held_out)
         restored = self.model_module.deserialize_model(
             self.model_module.serialize_model(model_a)
         )
@@ -119,6 +127,13 @@ class ModelFileTests(unittest.TestCase):
         metrics = self.model_module.evaluate_action_model(restored)
         self.assertTrue(metrics["policy_trained"])
         self.assertGreater(metrics["accuracy"], metrics["baseline_accuracy"])
+        self.assertEqual(metrics["held_out"]["per_action_support"], {
+            "rest": 40,
+            "explore": 30,
+            "learn": 12,
+            "observe": 18,
+        })
+        self.assertEqual(set(metrics["held_out"]["per_action_accuracy"]), set(self.model_module.ACTION_LABELS))
 
     def test_trained_policy_selects_action_but_explicit_rules_still_override(self):
         model = self.model_module.create_model()
@@ -245,6 +260,46 @@ class ModelFileTests(unittest.TestCase):
         self.assertEqual(metrics[0][0], 1)
         self.assertTrue(all(math.isfinite(value) for value in metrics[0][1].values()))
         self.assertEqual(gguf_data, self.model_module.serialize_gguf_model(restored))
+
+    def test_browser_pixel_inference_matches_python(self):
+        node = shutil.which("node")
+        if node is None:
+            self.skipTest("Node.js is required for browser inference compatibility.")
+
+        with tempfile.TemporaryDirectory(prefix="pixel-inference-tests-") as directory:
+            path = os.path.join(directory, "pixel.dodl")
+            model = self.model_module.train_pixel_model(
+                path, sample_count=8, epochs=1, seed=123
+            )
+            inputs = self.model_module.array(
+                "f", [0.2, 0.7, -0.3, 0.4, 0.1, -0.2, 1, 0.6]
+            )
+            network = self.model_module._network_from_model(model)
+            expected = list(network.forward(inputs)["output"])
+            module_path = os.path.join(
+                os.path.dirname(self.model_module.__file__), "pixel_model.mjs"
+            )
+            script = """
+import { readFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
+const [modulePath, modelPath] = process.argv.slice(1);
+const { parsePixelModel, runPixelModel } = await import(pathToFileURL(modulePath));
+const bytes = await readFile(modelPath);
+const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+const model = parsePixelModel(buffer);
+const output = runPixelModel(model, [0.2, 0.7, -0.3, 0.4, 0.1, -0.2, 1, 0.6]);
+console.log(JSON.stringify(Array.from(output)));
+"""
+            result = subprocess.run(
+                [node, "--input-type=module", "-e", script, module_path, path],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+        actual = json.loads(result.stdout)
+        for actual_value, expected_value in zip(actual, expected):
+            self.assertAlmostEqual(actual_value, expected_value, places=5)
 
     def test_merge_models_interpolates_weights_without_mutating_inputs(self):
         model_a = self.model_module.create_model()
@@ -410,6 +465,48 @@ class ModelFileTests(unittest.TestCase):
         request_payload = json.loads(urlopen.call_args.args[0].data)
         context = json.loads(request_payload["messages"][1]["content"])
         self.assertEqual(context["recent_memory"], memories[-5:])
+
+    def test_llm_provider_rejects_invalid_timeouts(self):
+        for timeout in (0, -1, float("inf"), float("nan"), True, "30"):
+            with self.subTest(timeout=timeout):
+                with self.assertRaisesRegex(ValueError, "positive finite"):
+                    self.model_module.LLMProvider(
+                        "openai-compatible", timeout=timeout
+                    )
+
+    def test_llm_provider_bounds_and_validates_http_payloads(self):
+        provider = self.model_module.LLMProvider(
+            "openai-compatible", base_url="http://localhost:11434/v1"
+        )
+        provider.MAX_PAYLOAD_SIZE = 1024
+
+        with patch("urllib.request.urlopen") as urlopen:
+            with self.assertRaisesRegex(
+                self.model_module.LLMProviderError, "request payload exceeds"
+            ):
+                provider.generate("x" * 2048, {}, [])
+            urlopen.assert_not_called()
+
+        oversized_response = io.BytesIO(b"{" + b" " * 1024)
+        with patch("urllib.request.urlopen", return_value=oversized_response):
+            with self.assertRaisesRegex(
+                self.model_module.LLMProviderError, "response exceeds"
+            ):
+                provider.generate("hello", {}, [])
+
+        invalid_content_type = io.BytesIO(b"{}")
+        invalid_content_type.headers = {"Content-Type": "text/plain"}
+        with patch("urllib.request.urlopen", return_value=invalid_content_type):
+            with self.assertRaisesRegex(
+                self.model_module.LLMProviderError, "JSON content type"
+            ):
+                provider.generate("hello", {}, [])
+
+        with patch("urllib.request.urlopen", return_value=io.BytesIO(b"{")):
+            with self.assertRaisesRegex(
+                self.model_module.LLMProviderError, "invalid JSON"
+            ):
+                provider.generate("hello", {}, [])
 
     def test_biocomputation_provider_posts_versioned_task_and_returns_result(self):
         response_body = {

@@ -55,7 +55,7 @@ From this directory, train the Python model's action policy:
 python3 me.py --train-actions --seed 123
 ```
 
-The command writes `noe-action-model.dodl` and a GGUF companion. It trains on a generated policy and checks progress against a fixed set of 100 validation scenarios. It keeps the best checkpoint and stops when validation accuracy no longer improves. Use `--samples`, `--epochs`, and `--patience` to adjust training, `--output` to choose a file path, and `--seed` to make a run repeatable. The engine uses the trained policy unless a rule or eligible goal takes priority.
+The command writes `noe-action-model.dodl` and a GGUF companion. It trains on a generated policy and selects checkpoints using 100 fixed validation scenarios. Evaluation also reports results on a separate 100-scenario held-out set, including accuracy and support for each action; held-out results do not affect checkpoint selection. Use `--samples`, `--epochs`, and `--patience` to adjust training, `--output` to choose a file path, and `--seed` to make a run repeatable. The engine uses the trained policy unless a rule or eligible goal takes priority.
 
 ### Pixel controller
 
@@ -85,7 +85,7 @@ The files are binary, not text or JSON. The serializer and loader support files 
 
 ## Use a language model for replies
 
-`LLMProvider` can request replies from OpenAI, Gemini, or an OpenAI-compatible server. It uses Python's standard library, so you do not need a provider SDK. Provider settings and API keys are read at runtime and are never saved in the model file.
+`LLMProvider` can request replies from OpenAI, Gemini, or an OpenAI-compatible server. It uses Python's standard library, so you do not need a provider SDK. Requests and responses are limited to 1 MiB, and the timeout must be a positive finite number. Provider settings and API keys are read at runtime and are never saved in the model file.
 
 For OpenAI, set:
 
@@ -166,7 +166,7 @@ You can pass DODL models or supported model paths. ONNX loading requires `pip in
 - `serialize_model(model)` and `deserialize_model(data)` convert to and from DODL bytes.
 - `serialize_gguf_model(model)` and `create_gguf_model_file(path, model)` write GGUF data.
 - `AIEngine(model=None)` runs a model. `step(input_value)` performs one cycle, and `export_model()` returns the updated model as bytes.
-- `train_action_model(...)` trains an action policy; `evaluate_action_model(model)` reports its validation results.
+- `train_action_model(...)` trains an action policy; `evaluate_action_model(model)` reports validation and held-out results, including per-action accuracy and support.
 - `merge_models(model_a, model_b, alpha=0.5)` blends network weights.
 - `LLMProvider(...)` configures a text-generation service; `AIEngine.respond(...)` requests a reply and runs one local cycle.
 - `BiocomputationProvider(...)` configures a remote service; `AIEngine.compute_biological(...)` submits a task without changing model state.

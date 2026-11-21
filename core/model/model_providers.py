@@ -190,6 +190,8 @@ class BiocomputationProvider:
 class LLMProvider:
     """Standard-library adapters for OpenAI-compatible APIs and Gemini."""
 
+    MAX_PAYLOAD_SIZE = 1024 * 1024
+
     def __init__(self, provider=None, api_key=None, model=None, timeout=30, base_url=None):
         self.provider = (provider or os.environ.get("NOESIS_PROVIDER", "openai")).lower()
         if self.provider not in ("openai", "gemini", "openai-compatible"):
@@ -215,6 +217,14 @@ class LLMProvider:
             "openai-compatible": "NOESIS_MODEL",
         }[self.provider]
         self.model = model or os.environ.get(provider_model_variable) or default_model
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
+            raise ValueError("LLM timeout must be a positive finite number.")
+        try:
+            timeout = float(timeout)
+        except (OverflowError, ValueError) as error:
+            raise ValueError("LLM timeout must be a positive finite number.") from error
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("LLM timeout must be a positive finite number.")
         self.timeout = timeout
         self.base_url = (
             base_url
@@ -281,22 +291,63 @@ class LLMProvider:
         return self._extract_text(response)
 
     def _post_json(self, url, payload, headers):
+        try:
+            request_data = json.dumps(
+                payload,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")
+        except (TypeError, ValueError) as error:
+            raise LLMProviderError("LLM request payload must contain finite JSON values.") from error
+        if len(request_data) > self.MAX_PAYLOAD_SIZE:
+            raise LLMProviderError("LLM request payload exceeds the 1 MiB limit.")
         request = urllib.request.Request(
             url,
-            data=json.dumps(payload).encode("utf-8"),
+            data=request_data,
             headers={"Content-Type": "application/json", **headers},
             method="POST",
         )
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                return json.loads(response.read().decode("utf-8"))
+                response_headers = getattr(response, "headers", None)
+                content_type = (
+                    response_headers.get("Content-Type")
+                    if response_headers is not None
+                    else None
+                )
+                if content_type is not None:
+                    media_type = content_type.split(";", 1)[0].strip().lower()
+                    if media_type != "application/json" and not media_type.endswith(
+                        "+json"
+                    ):
+                        raise LLMProviderError(
+                            "LLM API response must use a JSON content type."
+                        )
+                response_data = response.read(self.MAX_PAYLOAD_SIZE + 1)
         except urllib.error.HTTPError as error:
             raise LLMProviderError(
                 f"{self.provider} API request failed with HTTP {error.code}."
             ) from error
-        except (urllib.error.URLError, TimeoutError) as error:
-            raise LLMProviderError(f"{self.provider} API request failed: {error}.") from error
-        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        except LLMProviderError:
+            raise
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            OSError,
+            http.client.HTTPException,
+            ValueError,
+        ) as error:
+            raise LLMProviderError(
+                f"{self.provider} API request failed ({type(error).__name__})."
+            ) from error
+        if len(response_data) > self.MAX_PAYLOAD_SIZE:
+            raise LLMProviderError("LLM API response exceeds the 1 MiB limit.")
+        try:
+            return json.loads(
+                response_data.decode("utf-8"), parse_constant=_reject_json_constant
+            )
+        except (UnicodeDecodeError, ValueError) as error:
             raise LLMProviderError(f"{self.provider} API returned invalid JSON.") from error
 
     def _extract_text(self, response):
