@@ -32,6 +32,10 @@ class ModelFileTests(unittest.TestCase):
     def setUpClass(cls):
         cls.model_module = _load_model_module()
 
+    def _biocomputation_provider(self, endpoint="https://bio.example.test/compute", **kwargs):
+        kwargs.setdefault("operation_schemas", {"example": {"type": "object"}})
+        return self.model_module.BiocomputationProvider(endpoint, **kwargs)
+
     def test_tiny_network_backprop_uses_pre_update_output_weights(self):
         network = self.model_module.TinyNetwork(self.model_module.Random(1))
         network.input_size = 1
@@ -599,13 +603,16 @@ console.log(JSON.stringify(Array.from(output)));
             "run_id": "run-123",
         }
         response = io.BytesIO(json.dumps(response_body).encode())
-        provider = self.model_module.BiocomputationProvider(
+        provider = self._biocomputation_provider(
             "https://bio.example.test/compute", api_key="test-key"
         )
 
         with patch("urllib.request.build_opener") as build_opener:
             build_opener.return_value.open.return_value = response
-            result = provider.compute({"operation": "example", "inputs": {"x": 1}})
+            result = provider.compute(
+                {"operation": "example", "inputs": {"x": 1}},
+                approval_id="approval-123",
+            )
 
         request = build_opener.return_value.open.call_args.args[0]
         self.assertEqual(request.full_url, "https://bio.example.test/compute")
@@ -615,6 +622,7 @@ console.log(JSON.stringify(Array.from(output)));
             {
                 "protocol": "noesis-biocompute/v1",
                 "task": {"operation": "example", "inputs": {"x": 1}},
+                "approval_id": "approval-123",
             },
         )
         self.assertEqual(result, response_body)
@@ -633,7 +641,7 @@ console.log(JSON.stringify(Array.from(output)));
         response = io.BytesIO(
             json.dumps({"protocol": "other/v1", "result": True}).encode()
         )
-        provider = self.model_module.BiocomputationProvider(
+        provider = self._biocomputation_provider(
             "https://bio.example.test/compute"
         )
 
@@ -642,10 +650,10 @@ console.log(JSON.stringify(Array.from(output)));
             with self.assertRaisesRegex(
                 self.model_module.BiocomputationProviderError, "noesis-biocompute/v1"
             ):
-                provider.compute({"operation": "example"})
+                provider.compute({"operation": "example"}, approval_id="approval-123")
 
     def test_biocomputation_provider_validates_task_shape(self):
-        provider = self.model_module.BiocomputationProvider(
+        provider = self._biocomputation_provider(
             "https://bio.example.test/compute"
         )
 
@@ -654,7 +662,7 @@ console.log(JSON.stringify(Array.from(output)));
             ({"operation": "example", "inputs": []}, "inputs must be a JSON object"),
         ):
             with self.subTest(task=task), self.assertRaisesRegex(ValueError, message):
-                provider.compute(task)
+                provider.compute(task, approval_id="approval-123")
 
     def test_biocomputation_provider_validates_response_metadata(self):
         response = io.BytesIO(
@@ -666,7 +674,7 @@ console.log(JSON.stringify(Array.from(output)));
                 }
             ).encode()
         )
-        provider = self.model_module.BiocomputationProvider(
+        provider = self._biocomputation_provider(
             "https://bio.example.test/compute"
         )
 
@@ -676,7 +684,7 @@ console.log(JSON.stringify(Array.from(output)));
                 self.model_module.BiocomputationProviderError,
                 "run_id.*must be a string",
             ):
-                provider.compute({"operation": "example"})
+                provider.compute({"operation": "example"}, approval_id="approval-123")
 
     def test_biocomputation_provider_rejects_malformed_or_credentialed_endpoints(self):
         for endpoint in (
@@ -730,7 +738,7 @@ console.log(JSON.stringify(Array.from(output)));
             ).encode()
         )
         response.headers = {"Content-Type": "text/plain"}
-        provider = self.model_module.BiocomputationProvider(
+        provider = self._biocomputation_provider(
             "https://bio.example.test/compute"
         )
 
@@ -739,13 +747,13 @@ console.log(JSON.stringify(Array.from(output)));
             with self.assertRaisesRegex(
                 self.model_module.BiocomputationProviderError, "JSON content type"
             ):
-                provider.compute({"operation": "example"})
+                provider.compute({"operation": "example"}, approval_id="approval-123")
 
     def test_biocomputation_provider_rejects_nonstandard_json_constants(self):
         response = io.BytesIO(
             b'{"protocol":"noesis-biocompute/v1","result":NaN}'
         )
-        provider = self.model_module.BiocomputationProvider(
+        provider = self._biocomputation_provider(
             "https://bio.example.test/compute"
         )
 
@@ -754,10 +762,10 @@ console.log(JSON.stringify(Array.from(output)));
             with self.assertRaisesRegex(
                 self.model_module.BiocomputationProviderError, "invalid JSON"
             ):
-                provider.compute({"operation": "example"})
+                provider.compute({"operation": "example"}, approval_id="approval-123")
 
     def test_biocomputation_provider_sanitizes_transport_errors_without_retrying(self):
-        provider = self.model_module.BiocomputationProvider(
+        provider = self._biocomputation_provider(
             "https://bio.example.test/private-path?token=secret"
         )
 
@@ -769,21 +777,24 @@ console.log(JSON.stringify(Array.from(output)));
                 self.model_module.BiocomputationProviderError,
                 r"request failed \(OSError\)",
             ) as error:
-                provider.compute({"operation": "example"})
+                provider.compute({"operation": "example"}, approval_id="approval-123")
 
         self.assertNotIn("secret", str(error.exception))
         build_opener.return_value.open.assert_called_once()
 
     def test_biocomputation_provider_rejects_non_finite_task_values(self):
-        provider = self.model_module.BiocomputationProvider(
+        provider = self._biocomputation_provider(
             "https://bio.example.test/compute"
         )
 
         with self.assertRaisesRegex(ValueError, "finite JSON values"):
-            provider.compute({"operation": "example", "inputs": {"value": float("nan")}})
+            provider.compute(
+                {"operation": "example", "inputs": {"value": float("nan")}},
+                approval_id="approval-123",
+            )
 
     def test_biocomputation_provider_enforces_payload_size_limits(self):
-        provider = self.model_module.BiocomputationProvider(
+        provider = self._biocomputation_provider(
             "https://bio.example.test/compute"
         )
         oversized_task = {
@@ -792,7 +803,7 @@ console.log(JSON.stringify(Array.from(output)));
         }
 
         with self.assertRaisesRegex(ValueError, "1 MiB payload limit"):
-            provider.compute(oversized_task)
+            provider.compute(oversized_task, approval_id="approval-123")
 
         response = io.BytesIO(b"x" * (provider.MAX_PAYLOAD_SIZE + 1))
         with patch("urllib.request.build_opener") as build_opener:
@@ -801,10 +812,10 @@ console.log(JSON.stringify(Array.from(output)));
                 self.model_module.BiocomputationProviderError,
                 "response exceeds the 1 MiB limit",
             ):
-                provider.compute({"operation": "example"})
+                provider.compute({"operation": "example"}, approval_id="approval-123")
 
     def test_biocomputation_provider_handles_timeouts_without_retrying(self):
-        provider = self.model_module.BiocomputationProvider(
+        provider = self._biocomputation_provider(
             "https://bio.example.test/compute"
         )
 
@@ -814,14 +825,15 @@ console.log(JSON.stringify(Array.from(output)));
                 self.model_module.BiocomputationProviderError,
                 r"request failed \(TimeoutError\)",
             ):
-                provider.compute({"operation": "example"})
+                provider.compute({"operation": "example"}, approval_id="approval-123")
 
         build_opener.return_value.open.assert_called_once()
 
     def test_engine_submits_biocomputation_task_without_mutating_model(self):
         class FakeProvider:
-            def compute(self, task):
+            def compute(self, task, *, approval_id, idempotency_key=None):
                 self.task = task
+                self.approval_id = approval_id
                 return {"protocol": "fake", "result": 7}
 
         provider = FakeProvider()
@@ -829,11 +841,90 @@ console.log(JSON.stringify(Array.from(output)));
         initial_cycle = engine.get_state()["cycle"]
         task = {"operation": "example", "inputs": {"x": 3}}
 
-        result = engine.compute_biological(task, provider)
+        result = engine.compute_biological(
+            task, provider, approval_id="approval-123"
+        )
 
         self.assertEqual(provider.task, task)
+        self.assertEqual(provider.approval_id, "approval-123")
         self.assertEqual(result["result"], 7)
         self.assertEqual(engine.get_state()["cycle"], initial_cycle)
+
+    def test_biocomputation_provider_enforces_operation_input_schema(self):
+        provider = self._biocomputation_provider(
+            operation_schemas={
+                "example": {
+                    "type": "object",
+                    "properties": {"count": {"type": "integer", "minimum": 1}},
+                    "required": ["count"],
+                    "additionalProperties": False,
+                }
+            }
+        )
+
+        for task in (
+            {"operation": "unknown", "inputs": {"count": 1}},
+            {"operation": "example", "inputs": {}},
+            {"operation": "example", "inputs": {"count": True}},
+            {"operation": "example", "inputs": {"count": 1, "extra": 2}},
+        ):
+            with self.subTest(task=task), self.assertRaises(ValueError):
+                provider.compute(task, approval_id="approval-123")
+
+    def test_biocomputation_provider_requires_approval_and_async_idempotency(self):
+        provider = self._biocomputation_provider(
+            jobs_endpoint="https://bio.example.test/jobs"
+        )
+
+        with self.assertRaisesRegex(ValueError, "approval ID"):
+            provider.compute({"operation": "example"}, approval_id=" ")
+        with self.assertRaisesRegex(ValueError, "idempotency key"):
+            provider.submit_task(
+                {"operation": "example"},
+                approval_id="approval-123",
+                idempotency_key="",
+            )
+
+    def test_biocomputation_provider_submits_reads_and_cancels_async_jobs(self):
+        responses = [
+            {"job": {"id": "job-123", "status": "queued"}},
+            {"job": {"id": "job-123", "status": "running"}},
+            {"job": {"id": "job-123", "status": "cancelled"}},
+        ]
+        response_streams = [
+            io.BytesIO(
+                json.dumps({"protocol": "noesis-biocompute/v1", **body}).encode()
+            )
+            for body in responses
+        ]
+        provider = self._biocomputation_provider(
+            jobs_endpoint="https://bio.example.test/jobs"
+        )
+
+        with patch("urllib.request.build_opener") as build_opener:
+            build_opener.return_value.open.side_effect = response_streams
+            submitted = provider.submit_task(
+                {"operation": "example"},
+                approval_id="approval-123",
+                idempotency_key="request-123",
+            )
+            job = provider.get_job("job/123")
+            cancelled = provider.cancel_job(
+                "job-123",
+                approval_id="approval-123",
+                idempotency_key="cancel-123",
+            )
+
+        requests = [call.args[0] for call in build_opener.return_value.open.call_args_list]
+        self.assertEqual(submitted["job"]["status"], "queued")
+        self.assertEqual(job["job"]["status"], "running")
+        self.assertEqual(cancelled["job"]["status"], "cancelled")
+        self.assertEqual(requests[0].get_header("Idempotency-key"), "request-123")
+        self.assertEqual(requests[1].full_url, "https://bio.example.test/jobs/job%2F123")
+        self.assertEqual(requests[1].get_method(), "GET")
+        self.assertEqual(requests[2].full_url, "https://bio.example.test/jobs/job-123/cancel")
+        self.assertEqual(requests[2].get_method(), "POST")
+        self.assertEqual(requests[2].get_header("Idempotency-key"), "cancel-123")
 
     def test_gemini_provider_extracts_generated_reply(self):
         response = io.BytesIO(

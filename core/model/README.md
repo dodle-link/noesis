@@ -129,33 +129,60 @@ The provider writes the reply and may return a short analysis. The local engine 
 
 ## Connect a biocomputation service
 
-`BiocomputationProvider` sends a task to a remote service. Noesis does not perform biological computation, synthesize DNA, or control lab equipment. The remote service must translate the task into operations supported by its platform.
+`BiocomputationProvider` is a client for a separately deployed gateway. Noesis does not perform biological computation, operate bacteria, or control lab equipment. Connect the gateway to an existing, approved platform; do not expose platform controls directly to model-generated text.
 
-Set `NOESIS_BIOCOMPUTE_URL` and, if needed, `NOESIS_BIOCOMPUTE_API_KEY`. Remote URLs must use HTTPS; HTTP is allowed for localhost development. The key is sent as a bearer token and is not stored in the model. Requests time out after 30 seconds by default and are not retried, to avoid accidentally submitting a task twice.
+Set `NOESIS_BIOCOMPUTE_URL` and, if needed, `NOESIS_BIOCOMPUTE_API_KEY`. For asynchronous jobs, also set `NOESIS_BIOCOMPUTE_JOBS_URL` to a same-origin URL without a query or fragment. Remote URLs must use HTTPS; HTTP is allowed for localhost development. The key is sent as a bearer token and is not stored in the model. Requests time out after 30 seconds by default and are not retried.
 
-The request is JSON and must include a non-empty operation:
-
-```json
-{
-  "protocol": "noesis-biocompute/v1",
-  "task": {"operation": "your-platform-operation", "inputs": {"value": 1}}
-}
-```
-
-The service must return JSON with the same protocol and a `result` field. The `inputs` value must be an object. This call is explicit and does not change model state:
+Configure an explicit allowlist of platform operations and their input schemas in trusted application code. The provider supports a JSON Schema subset: `type`, `enum`, `properties`, `required`, `additionalProperties`, `items`, length/item limits, and numeric bounds. Unknown operations and extra fields can be rejected before they leave the client. A human approval ID is required for every submission; the gateway must independently verify that approval and the caller's authorization.
 
 ```python
 from me import AIEngine, BiocomputationProvider
 
+provider = BiocomputationProvider(
+        operation_schemas={
+                "read-approved-sample": {
+                        "type": "object",
+                        "properties": {
+                                "sample_ref": {"type": "string", "minLength": 1, "maxLength": 128}
+                        },
+                        "required": ["sample_ref"],
+                        "additionalProperties": False,
+                }
+        }
+)
 engine = AIEngine()
 result = engine.compute_biological(
-    {"operation": "your-platform-operation", "inputs": {"value": 1}},
-    provider=BiocomputationProvider(),
+        {"operation": "read-approved-sample", "inputs": {"sample_ref": "sample-123"}},
+        provider=provider,
+        approval_id="approval-issued-by-your-review-system",
 )
 print(result["result"])
 ```
 
-This protocol only describes how to send and receive a task; it is not a standard for biological computation. You need a service adapter for your platform. Review its safety requirements before connecting it to biological processes or equipment.
+The synchronous request body is:
+
+```json
+{
+    "protocol": "noesis-biocompute/v1",
+    "task": {"operation": "read-approved-sample", "inputs": {"sample_ref": "sample-123"}},
+    "approval_id": "approval-issued-by-your-review-system"
+}
+```
+
+The gateway must return JSON with the same protocol and a `result` field. It should include a `provenance` object describing the platform, method/assay version, timestamps, and quality-control outcome. `AIEngine.compute_biological()` does not change model state.
+
+For long-running work, the gateway accepts `POST` at `NOESIS_BIOCOMPUTE_URL`, with an `Idempotency-Key` header, and returns a job object:
+
+```json
+{
+    "protocol": "noesis-biocompute/v1",
+    "job": {"id": "job-123", "status": "queued"}
+}
+```
+
+Use `provider.submit_task(task, approval_id=..., idempotency_key=...)` to submit, `provider.get_job(job_id)` to poll `NOESIS_BIOCOMPUTE_JOBS_URL/{job_id}`, and `provider.cancel_job(job_id, approval_id=..., idempotency_key=...)` to request cancellation at `/cancel`. Valid statuses are `queued`, `running`, `succeeded`, `failed`, and `cancelled`; a succeeded job includes `result`. Cancellation is a request to the gateway, not a guarantee that a running platform operation can be stopped.
+
+The protocol is an integration contract, not a biological-computation standard or a platform adapter. The gateway must enforce permissions and operational limits, audit approvals and submissions, provide a platform-side stop procedure, and return sanitized errors. Test with mocks and the platform sandbox first, and follow the platform's and institution's applicable biosafety review before any real deployment.
 
 ## Merge models
 
@@ -172,7 +199,7 @@ You can pass DODL models or supported model paths. ONNX loading requires `pip in
 - `train_action_model(...)` trains an action policy; `evaluate_action_model(model)` reports validation and held-out results, including per-action accuracy and support.
 - `merge_models(model_a, model_b, alpha=0.5)` blends network weights.
 - `LLMProvider(...)` configures a text-generation service; `AIEngine.respond(...)` requests a reply and runs one local cycle.
-- `BiocomputationProvider(...)` configures a remote service; `AIEngine.compute_biological(...)` submits a task without changing model state.
+- `BiocomputationProvider(...)` configures an allowlisted gateway client; `AIEngine.compute_biological(...)` submits an approved task without changing model state. `submit_task()`, `get_job()`, and `cancel_job()` provide asynchronous job handling.
 
 Model validation checks network tensors and runtime metadata used by the engine. Serialization does not mutate its input; `AIEngine.export_model()` synchronizes live state and the update timestamp before serializing.
 

@@ -1318,10 +1318,18 @@ class AIEngine:
         result["reply"] = normalized["reply"]
         return result
 
-    def compute_biological(self, task, provider=None):
+    def compute_biological(
+        self, task, provider=None, *, approval_id, idempotency_key=None
+    ):
         """Submit an explicit task to a biological-computation service."""
+        if not isinstance(approval_id, str) or not approval_id.strip():
+            raise ValueError("A valid human approval ID is required.")
         active_provider = provider or BiocomputationProvider()
-        return active_provider.compute(task)
+        return active_provider.compute(
+            task,
+            approval_id=approval_id,
+            idempotency_key=idempotency_key,
+        )
 
     def sync_model(self):
         self.model["updatedAt"] = now()

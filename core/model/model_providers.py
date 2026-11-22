@@ -15,20 +15,118 @@ def _reject_json_constant(value):
     raise ValueError(f"Invalid JSON constant '{value}'.")
 
 
+def _validate_json_value(value, max_depth=64):
+    pending = [(value, 0)]
+    while pending:
+        current, depth = pending.pop()
+        if depth > max_depth:
+            raise ValueError("JSON value exceeds the maximum nesting depth.")
+        if isinstance(current, dict):
+            if any(not isinstance(key, str) for key in current):
+                raise ValueError("JSON object keys must be strings.")
+            pending.extend((item, depth + 1) for item in current.values())
+        elif isinstance(current, list):
+            pending.extend((item, depth + 1) for item in current)
+        elif current is None or isinstance(current, (str, bool, int)):
+            continue
+        elif isinstance(current, float) and math.isfinite(current):
+            continue
+        else:
+            raise ValueError("Value must contain finite JSON values.")
+
+
+def _validate_input_schema(value, schema, path="inputs"):
+    supported_keywords = {
+        "type",
+        "enum",
+        "properties",
+        "required",
+        "additionalProperties",
+        "items",
+        "minItems",
+        "maxItems",
+        "minLength",
+        "maxLength",
+        "minimum",
+        "maximum",
+    }
+    if not isinstance(schema, dict) or set(schema) - supported_keywords:
+        raise ValueError("Biocomputation input schema is invalid or unsupported.")
+
+    expected_type = schema.get("type")
+    type_checks = {
+        "object": lambda item: isinstance(item, dict),
+        "array": lambda item: isinstance(item, list),
+        "string": lambda item: isinstance(item, str),
+        "number": lambda item: isinstance(item, (int, float)) and not isinstance(item, bool),
+        "integer": lambda item: isinstance(item, int) and not isinstance(item, bool),
+        "boolean": lambda item: isinstance(item, bool),
+        "null": lambda item: item is None,
+    }
+    if expected_type is not None:
+        check = type_checks.get(expected_type)
+        if check is None or not check(value):
+            raise ValueError(f"Biocomputation input '{path}' has the wrong type.")
+    if "enum" in schema and value not in schema["enum"]:
+        raise ValueError(f"Biocomputation input '{path}' is not an allowed value.")
+
+    if isinstance(value, dict):
+        properties = schema.get("properties", {})
+        required = schema.get("required", [])
+        additional = schema.get("additionalProperties", True)
+        if not isinstance(properties, dict) or not isinstance(required, list):
+            raise ValueError("Biocomputation input schema is invalid.")
+        if any(not isinstance(key, str) for key in required):
+            raise ValueError("Biocomputation input schema is invalid.")
+        missing = [key for key in required if key not in value]
+        if missing:
+            raise ValueError(f"Biocomputation input '{path}' is missing required fields.")
+        for key, item in value.items():
+            child_path = f"{path}.{key}"
+            if key in properties:
+                _validate_input_schema(item, properties[key], child_path)
+            elif additional is False:
+                raise ValueError(f"Biocomputation input '{child_path}' is not allowed.")
+            elif isinstance(additional, dict):
+                _validate_input_schema(item, additional, child_path)
+    elif isinstance(value, list) and "items" in schema:
+        for index, item in enumerate(value):
+            _validate_input_schema(item, schema["items"], f"{path}[{index}]")
+
+    limits = {
+        str: ("minLength", "maxLength"),
+        list: ("minItems", "maxItems"),
+    }
+    for value_type, (minimum_key, maximum_key) in limits.items():
+        if isinstance(value, value_type):
+            if minimum_key in schema and len(value) < schema[minimum_key]:
+                raise ValueError(f"Biocomputation input '{path}' is too short.")
+            if maximum_key in schema and len(value) > schema[maximum_key]:
+                raise ValueError(f"Biocomputation input '{path}' is too long.")
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if "minimum" in schema and value < schema["minimum"]:
+            raise ValueError(f"Biocomputation input '{path}' is below its minimum.")
+        if "maximum" in schema and value > schema["maximum"]:
+            raise ValueError(f"Biocomputation input '{path}' exceeds its maximum.")
+
+
 class _SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
     def __init__(self, endpoint):
         super().__init__()
         parsed_endpoint = urllib.parse.urlsplit(endpoint)
-        self.origin = (
-            parsed_endpoint.scheme,
-            parsed_endpoint.hostname,
-            parsed_endpoint.port,
-        )
+        self.origin = self._origin(parsed_endpoint)
+
+    @staticmethod
+    def _origin(parsed_url):
+        port = parsed_url.port
+        if port is None:
+            port = {"http": 80, "https": 443}.get(parsed_url.scheme.lower())
+        return parsed_url.scheme.lower(), (parsed_url.hostname or "").lower(), port
 
     def redirect_request(self, request, file_pointer, code, message, headers, new_url):
         try:
             parsed_url = urllib.parse.urlsplit(new_url)
-            origin = (parsed_url.scheme, parsed_url.hostname, parsed_url.port)
+            origin = self._origin(parsed_url)
         except ValueError:
             return None
         if (
@@ -52,12 +150,20 @@ class BiocomputationProviderError(RuntimeError):
 
 
 class BiocomputationProvider:
-    """Client for a remote biological-computation service implementing Noesis' JSON contract."""
+    """Client for a schema-gated Noesis biocomputation gateway."""
 
     PROTOCOL = "noesis-biocompute/v1"
     MAX_PAYLOAD_SIZE = 1024 * 1024
+    JOB_STATUSES = frozenset(("queued", "running", "succeeded", "failed", "cancelled"))
 
-    def __init__(self, endpoint=None, api_key=None, timeout=30):
+    def __init__(
+        self,
+        endpoint=None,
+        api_key=None,
+        timeout=30,
+        operation_schemas=None,
+        jobs_endpoint=None,
+    ):
         self.endpoint = endpoint or os.environ.get("NOESIS_BIOCOMPUTE_URL")
         if not self.endpoint:
             raise ValueError("Set NOESIS_BIOCOMPUTE_URL or pass endpoint.")
@@ -95,37 +201,101 @@ class BiocomputationProvider:
         self.api_key = api_key or os.environ.get("NOESIS_BIOCOMPUTE_API_KEY")
         if self.api_key is not None and not isinstance(self.api_key, str):
             raise ValueError("Biocomputation API key must be a string.")
+        if operation_schemas is not None and (
+            not isinstance(operation_schemas, dict)
+            or any(
+                not isinstance(operation, str)
+                or not operation.strip()
+                or not isinstance(schema, dict)
+                for operation, schema in operation_schemas.items()
+            )
+        ):
+            raise ValueError("Biocomputation operation schemas must be a mapping of names to objects.")
+        self.operation_schemas = dict(operation_schemas or {})
+        self.jobs_endpoint = jobs_endpoint or os.environ.get("NOESIS_BIOCOMPUTE_JOBS_URL")
+        if self.jobs_endpoint:
+            try:
+                parsed_jobs = urllib.parse.urlsplit(self.jobs_endpoint)
+                jobs_origin = _SameOriginRedirectHandler._origin(parsed_jobs)
+                parsed_jobs.port
+            except (AttributeError, ValueError) as error:
+                raise ValueError("Biocomputation jobs endpoint is malformed.") from error
+            if (
+                not parsed_jobs.hostname
+                or parsed_jobs.query
+                or parsed_jobs.fragment
+                or jobs_origin != _SameOriginRedirectHandler._origin(parsed_endpoint)
+            ):
+                raise ValueError("Biocomputation jobs endpoint must be a same-origin URL without query or fragment.")
         self.timeout = timeout
 
-    def compute(self, task):
+    @staticmethod
+    def _validate_approval_id(approval_id):
+        if (
+            not isinstance(approval_id, str)
+            or not approval_id.strip()
+            or len(approval_id) > 256
+            or "\r" in approval_id
+            or "\n" in approval_id
+        ):
+            raise ValueError("A valid human approval ID is required.")
+
+    @staticmethod
+    def _validate_idempotency_key(idempotency_key):
+        if (
+            not isinstance(idempotency_key, str)
+            or not idempotency_key.strip()
+            or len(idempotency_key) > 256
+            or "\r" in idempotency_key
+            or "\n" in idempotency_key
+        ):
+            raise ValueError("A valid idempotency key is required.")
+
+    def _validate_task(self, task):
         if not isinstance(task, dict):
             raise ValueError("Biocomputation task must be a JSON object.")
+        if set(task) - {"operation", "inputs"}:
+            raise ValueError("Biocomputation task contains unsupported fields.")
         operation = task.get("operation")
         if not isinstance(operation, str) or not operation.strip():
             raise ValueError("Biocomputation task must include a non-empty operation.")
-        if "inputs" in task and not isinstance(task["inputs"], dict):
+        if operation not in self.operation_schemas:
+            raise ValueError("Biocomputation operation is not enabled by a configured input schema.")
+        inputs = task.get("inputs", {})
+        if not isinstance(inputs, dict):
             raise ValueError("Biocomputation task inputs must be a JSON object.")
+        _validate_json_value(task)
+        _validate_input_schema(inputs, self.operation_schemas[operation])
+        return operation
+
+    def _encode_payload(self, body):
         try:
             payload = json.dumps(
-                {"protocol": self.PROTOCOL, "task": task},
+                body,
                 ensure_ascii=False,
                 separators=(",", ":"),
                 allow_nan=False,
             ).encode("utf-8")
-        except (TypeError, ValueError) as error:
+        except (TypeError, ValueError, RecursionError) as error:
             raise ValueError("Biocomputation task must contain finite JSON values.") from error
         if len(payload) > self.MAX_PAYLOAD_SIZE:
             raise ValueError("Biocomputation task exceeds the 1 MiB payload limit.")
+        return payload
 
+    def _request_json(self, url, method, body=None, idempotency_key=None):
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
+        if idempotency_key is not None:
+            self._validate_idempotency_key(idempotency_key)
+            headers["Idempotency-Key"] = idempotency_key
+        payload = self._encode_payload(body) if body is not None else None
         try:
             request = urllib.request.Request(
-                self.endpoint, data=payload, headers=headers, method="POST"
+                url, data=payload, headers=headers, method=method
             )
             opener = urllib.request.build_opener(
-                _SameOriginRedirectHandler(self.endpoint)
+                _SameOriginRedirectHandler(url)
             )
             with opener.open(request, timeout=self.timeout) as response:
                 response_headers = getattr(response, "headers", None)
@@ -167,17 +337,64 @@ class BiocomputationProvider:
             result = json.loads(
                 response_data.decode("utf-8"), parse_constant=_reject_json_constant
             )
-        except (UnicodeDecodeError, ValueError) as error:
+        except (UnicodeDecodeError, ValueError, RecursionError) as error:
             raise BiocomputationProviderError(
                 "Biocomputation service returned invalid JSON."
             ) from error
+        if not isinstance(result, dict) or result.get("protocol") != self.PROTOCOL:
+            raise BiocomputationProviderError(
+                f"Biocomputation response must include protocol '{self.PROTOCOL}'."
+            )
+        try:
+            _validate_json_value(result)
+        except ValueError as error:
+            raise BiocomputationProviderError(
+                "Biocomputation service returned an invalid or overly nested JSON value."
+            ) from error
+        return result
+
+    def _validate_job_response(self, result):
+        job = result.get("job")
+        if not isinstance(job, dict):
+            raise BiocomputationProviderError("Biocomputation response must include a job object.")
+        if not isinstance(job.get("id"), str) or not job["id"].strip():
+            raise BiocomputationProviderError("Biocomputation job ID must be a non-empty string.")
+        if job.get("status") not in self.JOB_STATUSES:
+            raise BiocomputationProviderError("Biocomputation job status is invalid.")
+        if job["status"] == "succeeded" and "result" not in job:
+            raise BiocomputationProviderError(
+                "A succeeded biocomputation job must include a result."
+            )
+        if "provenance" in job and not isinstance(job["provenance"], dict):
+            raise BiocomputationProviderError("Biocomputation job provenance must be an object.")
+        if "error" in job and not isinstance(job["error"], str):
+            raise BiocomputationProviderError("Biocomputation job error must be a string.")
+        return result
+
+    def _job_url(self, job_id, action=None):
+        if not self.jobs_endpoint:
+            raise ValueError("Set NOESIS_BIOCOMPUTE_JOBS_URL to use asynchronous jobs.")
+        if not isinstance(job_id, str) or not job_id.strip() or len(job_id) > 256:
+            raise ValueError("Biocomputation job ID must be a non-empty string.")
+        url = f"{self.jobs_endpoint.rstrip('/')}/{urllib.parse.quote(job_id, safe='')}"
+        if action:
+            url = f"{url}/{action}"
+        return url
+
+    def compute(self, task, *, approval_id, idempotency_key=None):
+        self._validate_task(task)
+        self._validate_approval_id(approval_id)
+        result = self._request_json(
+            self.endpoint,
+            "POST",
+            {"protocol": self.PROTOCOL, "task": task, "approval_id": approval_id},
+            idempotency_key=idempotency_key,
+        )
         if (
-            not isinstance(result, dict)
-            or result.get("protocol") != self.PROTOCOL
-            or "result" not in result
+            "result" not in result
         ):
             raise BiocomputationProviderError(
-                f"Biocomputation response must include protocol '{self.PROTOCOL}' and a result."
+                "Biocomputation response must include a result."
             )
         for field in ("provider", "run_id"):
             if field in result and not isinstance(result[field], str):
@@ -185,6 +402,33 @@ class BiocomputationProvider:
                     f"Biocomputation response field '{field}' must be a string."
                 )
         return result
+
+    def submit_task(self, task, *, approval_id, idempotency_key):
+        self._validate_task(task)
+        self._validate_approval_id(approval_id)
+        self._validate_idempotency_key(idempotency_key)
+        result = self._request_json(
+            self.endpoint,
+            "POST",
+            {"protocol": self.PROTOCOL, "task": task, "approval_id": approval_id},
+            idempotency_key=idempotency_key,
+        )
+        return self._validate_job_response(result)
+
+    def get_job(self, job_id):
+        result = self._request_json(self._job_url(job_id), "GET")
+        return self._validate_job_response(result)
+
+    def cancel_job(self, job_id, *, approval_id, idempotency_key):
+        self._validate_approval_id(approval_id)
+        self._validate_idempotency_key(idempotency_key)
+        result = self._request_json(
+            self._job_url(job_id, "cancel"),
+            "POST",
+            {"protocol": self.PROTOCOL, "approval_id": approval_id},
+            idempotency_key=idempotency_key,
+        )
+        return self._validate_job_response(result)
 
 
 class LLMProvider:
