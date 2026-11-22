@@ -12,6 +12,7 @@ tags:
 ## Files in this folder
 
 - `me.py` implements the Python model, training commands, and DODL/GGUF file support.
+- `model_config.py` holds shared model and file-format limits; `model_formats.py` validates, serializes, and deserializes model data.
 - `model_providers.py` connects to OpenAI, Gemini, OpenAI-compatible APIs, and remote biocomputation services.
 - `index.html` and `me.js` run the browser-based pixel demo. This demo uses its own steering model; it is separate from the Python agent.
 - `noe-model.dodl` and `noe-model.F32.gguf` are the default Python model files. The `noe-pixel-model` files belong to the pixel demo.
@@ -56,6 +57,8 @@ python3 me.py --train-actions --seed 123
 ```
 
 The command writes `noe-action-model.dodl` and a GGUF companion. It trains on a generated policy and selects checkpoints using 100 fixed validation scenarios. Evaluation also reports results on a separate 100-scenario held-out set, including accuracy and support for each action; held-out results do not affect checkpoint selection. Use `--samples`, `--epochs`, and `--patience` to adjust training, `--output` to choose a file path, and `--seed` to make a run repeatable. The engine uses the trained policy unless a rule or eligible goal takes priority.
+
+Evaluation reports both a majority-class baseline and `rule_baseline_accuracy`. The generated labels are defined by the same threshold policy used by the rule baseline, so a perfect rule-baseline score is expected; compare against real task scenarios before preferring the neural policy.
 
 ### Pixel controller
 
@@ -170,6 +173,8 @@ You can pass DODL models or supported model paths. ONNX loading requires `pip in
 - `merge_models(model_a, model_b, alpha=0.5)` blends network weights.
 - `LLMProvider(...)` configures a text-generation service; `AIEngine.respond(...)` requests a reply and runs one local cycle.
 - `BiocomputationProvider(...)` configures a remote service; `AIEngine.compute_biological(...)` submits a task without changing model state.
+
+Model validation checks network tensors and runtime metadata used by the engine. Serialization does not mutate its input; `AIEngine.export_model()` synchronizes live state and the update timestamp before serializing.
 
 ## License and contributing
 

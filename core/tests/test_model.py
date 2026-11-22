@@ -127,6 +127,8 @@ class ModelFileTests(unittest.TestCase):
         metrics = self.model_module.evaluate_action_model(restored)
         self.assertTrue(metrics["policy_trained"])
         self.assertGreater(metrics["accuracy"], metrics["baseline_accuracy"])
+        self.assertEqual(metrics["rule_baseline_accuracy"], 1.0)
+        self.assertEqual(metrics["held_out"]["rule_baseline_accuracy"], 1.0)
         self.assertEqual(metrics["held_out"]["per_action_support"], {
             "rest": 40,
             "explore": 30,
@@ -134,6 +136,30 @@ class ModelFileTests(unittest.TestCase):
             "observe": 18,
         })
         self.assertEqual(set(metrics["held_out"]["per_action_accuracy"]), set(self.model_module.ACTION_LABELS))
+
+    def test_training_does_not_replace_artifacts_if_serialization_fails(self):
+        with tempfile.TemporaryDirectory(prefix="model-atomic-write-tests-") as directory:
+            path = os.path.join(directory, "pixel.dodl")
+            gguf_path = os.path.join(directory, "pixel.F32.gguf")
+            with open(path, "wb") as model_file:
+                model_file.write(b"previous dodl")
+            with open(gguf_path, "wb") as model_file:
+                model_file.write(b"previous gguf")
+
+            with patch.object(
+                self.model_module,
+                "serialize_gguf_model",
+                side_effect=ValueError("invalid gguf model"),
+            ):
+                with self.assertRaisesRegex(ValueError, "invalid gguf model"):
+                    self.model_module.train_pixel_model(
+                        path, sample_count=8, epochs=1, seed=123
+                    )
+
+            with open(path, "rb") as model_file:
+                self.assertEqual(model_file.read(), b"previous dodl")
+            with open(gguf_path, "rb") as model_file:
+                self.assertEqual(model_file.read(), b"previous gguf")
 
     def test_trained_policy_selects_action_but_explicit_rules_still_override(self):
         model = self.model_module.create_model()
@@ -205,6 +231,47 @@ class ModelFileTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "weights1 array length"):
             self.model_module.serialize_model(model)
 
+    def test_validate_model_rejects_malformed_runtime_metadata(self):
+        invalid_models = []
+
+        invalid_state = self.model_module.create_model()
+        invalid_state["state"]["energy"] = "high"
+        invalid_models.append((invalid_state, "state field 'energy'"))
+
+        invalid_rule = self.model_module.create_model()
+        invalid_rule["rules"][0]["enabled"] = 1
+        invalid_models.append((invalid_rule, "invalid rule"))
+
+        invalid_behavior = self.model_module.create_model()
+        invalid_behavior["behavior"][0] = [[]]
+        invalid_models.append((invalid_behavior, "invalid instruction"))
+
+        invalid_goal = self.model_module.create_model()
+        invalid_goal["goals"][0]["target"]["energyMin"] = float("nan")
+        invalid_models.append((invalid_goal, "finite JSON values"))
+
+        for model, message in invalid_models:
+            with self.subTest(message=message), self.assertRaisesRegex(ValueError, message):
+                self.model_module.validate_model(model)
+
+    def test_ai_engine_rejects_invalid_model_before_using_it(self):
+        model = self.model_module.create_model()
+        model["state"].pop("energy")
+
+        with self.assertRaisesRegex(ValueError, "state field 'energy'"):
+            self.model_module.AIEngine(model)
+
+    def test_serialize_model_does_not_mutate_model(self):
+        model = self.model_module.create_model()
+        original_updated_at = model["updatedAt"]
+
+        data = self.model_module.serialize_model(model)
+
+        self.assertEqual(model["updatedAt"], original_updated_at)
+        self.assertEqual(
+            self.model_module.deserialize_model(data)["updatedAt"], original_updated_at
+        )
+
     def test_deserialize_model_rejects_nonpositive_network_dimensions(self):
         data = self.model_module.serialize_model(self.model_module.create_model())
         version, _, metadata_size, network_size = struct.unpack_from("<HHII", data, 4)
@@ -219,6 +286,22 @@ class ModelFileTests(unittest.TestCase):
         )
 
         with self.assertRaisesRegex(ValueError, "Invalid network shape"):
+            self.model_module.deserialize_model(malformed_data)
+
+    def test_deserialize_model_rejects_nonstandard_json_constants(self):
+        data = self.model_module.serialize_model(self.model_module.create_model())
+        version, _, metadata_size, network_size = struct.unpack_from("<HHII", data, 4)
+        metadata = json.loads(data[16 : 16 + metadata_size])
+        metadata["state"]["energy"] = float("nan")
+        metadata_bytes = json.dumps(metadata, separators=(",", ":")).encode("utf-8")
+        malformed_data = (
+            self.model_module.MAGIC
+            + struct.pack("<HHII", version, 0, len(metadata_bytes), network_size)
+            + metadata_bytes
+            + data[16 + metadata_size :]
+        )
+
+        with self.assertRaisesRegex(ValueError, "Invalid DODL model metadata"):
             self.model_module.deserialize_model(malformed_data)
 
     def test_create_model_file_writes_deserializable_model(self):

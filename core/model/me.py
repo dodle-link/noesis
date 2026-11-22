@@ -4,16 +4,27 @@
 
 from array import array
 import argparse
-import base64
 import copy
 import json
 import math
 import os
 import secrets
 import struct
+import tempfile
 import time
 
 if __package__:
+    from .model_config import CONFIG, HEADER_SIZE, MAGIC
+    from .model_formats import (
+        decode_model_from_storage,
+        deserialize_model,
+        encode_model_for_storage,
+        load_stored_model,
+        save_stored_model,
+        serialize_gguf_model,
+        serialize_model,
+        validate_model,
+    )
     from .model_providers import (
         BiocomputationProvider,
         BiocomputationProviderError,
@@ -22,6 +33,17 @@ if __package__:
         normalize_provider_response,
     )
 else:
+    from model_config import CONFIG, HEADER_SIZE, MAGIC
+    from model_formats import (
+        decode_model_from_storage,
+        deserialize_model,
+        encode_model_for_storage,
+        load_stored_model,
+        save_stored_model,
+        serialize_gguf_model,
+        serialize_model,
+        validate_model,
+    )
     from model_providers import (
         BiocomputationProvider,
         BiocomputationProviderError,
@@ -31,25 +53,6 @@ else:
     )
 
 
-CONFIG = {
-    "VERSION": 2,
-    "MAX_FILE_SIZE": 1024 * 1024,
-    "TARGET_FILE_SIZE": 950 * 1024,
-    "INPUT_SIZE": 16,
-    "HIDDEN_SIZE": 32,
-    "OUTPUT_SIZE": 8,
-    "MEMORY_LIMIT": 200,
-    "RULE_LIMIT": 64,
-    "BEHAVIOR_LIMIT": 128,
-    "LEARNING_RATE": 0.02,
-    "MIN_WEIGHT": -5,
-    "MAX_WEIGHT": 5,
-    "STATE_MIN": 0,
-    "STATE_MAX": 100,
-}
-
-MAGIC = b"DODL"
-HEADER_SIZE = 16
 PIXEL_INPUT_SIZE = 8
 PIXEL_OUTPUT_SIZE = 2
 ACTION_LABELS = ("rest", "explore", "learn", "observe")
@@ -387,6 +390,7 @@ def _action_policy_held_out_examples():
 
 def _action_policy_metrics(network, examples):
     correct = 0
+    rule_baseline_correct = 0
     squared_error = 0.0
     class_totals = {label: 0 for label in ACTION_LABELS}
     class_correct = {label: 0 for label in ACTION_LABELS}
@@ -394,9 +398,14 @@ def _action_policy_metrics(network, examples):
         target_index = ACTION_LABELS.index(target)
         outputs = network.forward(inputs)["output"]
         prediction = ACTION_LABELS[max(range(len(ACTION_LABELS)), key=lambda index: outputs[index])]
+        rule_prediction = _action_policy_target(
+            inputs[0] * 100, inputs[1] * 100, inputs[2] * 100
+        )
         if prediction == target:
             correct += 1
             class_correct[target] += 1
+        if rule_prediction == target:
+            rule_baseline_correct += 1
         class_totals[target] += 1
         for index, output in enumerate(outputs[: len(ACTION_LABELS)]):
             expected = 1.0 if index == target_index else 0.0
@@ -405,6 +414,7 @@ def _action_policy_metrics(network, examples):
     return {
         "accuracy": correct / sample_count,
         "baseline_accuracy": sum(class_totals[label] for label in ACTION_LABELS if label == "observe") / sample_count,
+        "rule_baseline_accuracy": rule_baseline_correct / sample_count,
         "mse": squared_error / (sample_count * len(ACTION_LABELS)),
         "per_action_accuracy": {
             label: class_correct[label] / class_totals[label]
@@ -527,10 +537,11 @@ def train_action_model(
         "bias2": network.bias2,
         "policyTrained": True,
     }
-    with open(path, "wb") as model_file:
-        model_file.write(serialize_model(model))
+    model["updatedAt"] = now()
     gguf_path = os.path.splitext(os.fsdecode(path))[0] + ".F32.gguf"
-    create_gguf_model_file(gguf_path, model)
+    _write_model_artifacts(
+        ((path, serialize_model(model)), (gguf_path, serialize_gguf_model(model)))
+    )
     return model
 
 
@@ -603,10 +614,11 @@ def train_pixel_model(
         "weights2": network.weights2,
         "bias2": network.bias2,
     }
-    with open(path, "wb") as model_file:
-        model_file.write(serialize_model(model))
+    model["updatedAt"] = now()
     gguf_path = os.path.splitext(os.fsdecode(path))[0] + ".F32.gguf"
-    create_gguf_model_file(gguf_path, model)
+    _write_model_artifacts(
+        ((path, serialize_model(model)), (gguf_path, serialize_gguf_model(model)))
+    )
     return model
 
 
@@ -885,6 +897,8 @@ def merge_models(model_a, model_b, alpha=0.5):
         model_a = load_model_file(model_a)
     if not isinstance(model_b, dict):
         model_b = load_model_file(model_b)
+    validate_model(model_a)
+    validate_model(model_b)
     if isinstance(alpha, bool) or not isinstance(alpha, (int, float)) or not math.isfinite(alpha):
         raise ValueError("alpha must be a finite number between 0 and 1.")
     if not 0 <= alpha <= 1:
@@ -958,230 +972,42 @@ def merge_models(model_a, model_b, alpha=0.5):
     return merged
 
 
-def validate_model(model):
-    if not isinstance(model, dict):
-        raise ValueError("Model must be an object.")
-    for key, limit in (
-        ("memory", CONFIG["MEMORY_LIMIT"]),
-        ("rules", CONFIG["RULE_LIMIT"]),
-        ("behavior", CONFIG["BEHAVIOR_LIMIT"]),
-    ):
-        values = model.get(key)
-        if not isinstance(values, list):
-            raise ValueError(f"Model {key} must be a list.")
-        if len(values) > limit:
-            raise ValueError(f"{key.capitalize()} limit exceeded.")
-
-    network = model.get("network")
-    if not isinstance(network, dict):
-        raise ValueError("Model network must be an object.")
-    shape = tuple(network.get(key) for key in ("inputSize", "hiddenSize", "outputSize"))
-    if any(not isinstance(size, int) or isinstance(size, bool) or size <= 0 for size in shape):
-        raise ValueError("Invalid network shape.")
-    input_size, hidden_size, output_size = shape
-    if "policyTrained" in network and not isinstance(network["policyTrained"], bool):
-        raise ValueError("Model network policyTrained must be a boolean.")
-    expected_lengths = {
-        "weights1": input_size * hidden_size,
-        "bias1": hidden_size,
-        "weights2": hidden_size * output_size,
-        "bias2": output_size,
-    }
-    for key, expected_length in expected_lengths.items():
-        values = network.get(key)
-        if not isinstance(values, (array, list, tuple)) or len(values) != expected_length:
-            raise ValueError(f"Model has invalid {key} array length.")
-        for value in values:
+def _write_model_artifacts(artifacts):
+    staged = []
+    try:
+        for path, data in artifacts:
+            path = os.fsdecode(os.fspath(path))
+            directory = os.path.dirname(os.path.abspath(path))
+            prefix = f".{os.path.basename(path)}."
+            with tempfile.NamedTemporaryFile(
+                mode="wb", dir=directory, prefix=prefix, suffix=".tmp", delete=False
+            ) as temporary_file:
+                staged.append((temporary_file.name, path))
+                temporary_file.write(data)
+        for temporary_path, path in staged:
+            os.replace(temporary_path, path)
+    finally:
+        for temporary_path, _ in staged:
             try:
-                is_finite = math.isfinite(value)
-            except (OverflowError, TypeError, ValueError) as error:
-                raise ValueError(f"Model {key} values must be finite numbers.") from error
-            if not is_finite:
-                raise ValueError(f"Model {key} values must be finite numbers.")
-    return True
-
-
-def _float_array_bytes(values):
-    return struct.pack(f"<{len(values)}f", *values)
-
-
-def serialize_model(model):
-    validate_model(model)
-    model["updatedAt"] = now()
-    network = model["network"]
-    metadata = {
-        "version": model["version"],
-        "id": list(model["id"]),
-        "createdAt": model["createdAt"],
-        "updatedAt": model["updatedAt"],
-        "randomSeed": model["randomSeed"],
-        "memory": model["memory"],
-        "rules": model["rules"],
-        "behavior": model["behavior"],
-        "state": model["state"],
-        "goals": model["goals"],
-        "networkShape": {
-            "inputSize": network["inputSize"],
-            "hiddenSize": network["hiddenSize"],
-            "outputSize": network["outputSize"],
-        },
-        "policyTrained": bool(network.get("policyTrained", False)),
-    }
-    metadata_bytes = json.dumps(metadata, separators=(",", ":"), allow_nan=False).encode("utf-8")
-    network_bytes = b"".join(
-        _float_array_bytes(network[key]) for key in ("weights1", "bias1", "weights2", "bias2")
-    )
-    total_size = HEADER_SIZE + len(metadata_bytes) + len(network_bytes)
-    if total_size > CONFIG["MAX_FILE_SIZE"]:
-        raise ValueError(f"Model exceeds 1 MB: {total_size} bytes")
-    header = MAGIC + struct.pack("<HHII", CONFIG["VERSION"], 0, len(metadata_bytes), len(network_bytes))
-    return header + metadata_bytes + network_bytes
-
-
-def _gguf_string(value):
-    encoded = value.encode("utf-8")
-    return struct.pack("<Q", len(encoded)) + encoded
-
-
-def serialize_gguf_model(model):
-    network = model["network"]
-    tensors = (
-        ("network.weights1", (network["inputSize"], network["hiddenSize"]), network["weights1"]),
-        ("network.bias1", (network["hiddenSize"],), network["bias1"]),
-        ("network.weights2", (network["hiddenSize"], network["outputSize"]), network["weights2"]),
-        ("network.bias2", (network["outputSize"],), network["bias2"]),
-    )
-    metadata = (
-        ("general.architecture", 8, "noesis"),
-        ("general.name", 8, "Noesis Tiny Network"),
-        ("general.alignment", 4, 32),
-        ("noesis.input_size", 4, network["inputSize"]),
-        ("noesis.hidden_size", 4, network["hiddenSize"]),
-        ("noesis.output_size", 4, network["outputSize"]),
-        ("noesis.workspace_version", 4, 1),
-        ("noesis.workspace_format", 8, "cycle_snapshot"),
-    )
-    metadata_bytes = bytearray()
-    for key, value_type, value in metadata:
-        metadata_bytes.extend(_gguf_string(key))
-        metadata_bytes.extend(struct.pack("<I", value_type))
-        metadata_bytes.extend(_gguf_string(value) if value_type == 8 else struct.pack("<I", value))
-
-    tensor_data = bytearray()
-    tensor_descriptors = bytearray()
-    for name, dimensions, values in tensors:
-        tensor_data.extend(b"\0" * ((-len(tensor_data)) % 32))
-        offset = len(tensor_data)
-        tensor_data.extend(_float_array_bytes(values))
-        tensor_descriptors.extend(_gguf_string(name))
-        tensor_descriptors.extend(struct.pack("<I", len(dimensions)))
-        tensor_descriptors.extend(struct.pack(f"<{len(dimensions)}Q", *dimensions))
-        tensor_descriptors.extend(struct.pack("<IQ", 0, offset))
-
-    header = b"GGUF" + struct.pack("<IQQ", 3, len(tensors), len(metadata))
-    content = header + metadata_bytes + tensor_descriptors
-    content += b"\0" * ((-len(content)) % 32)
-    return content + tensor_data
+                os.unlink(temporary_path)
+            except FileNotFoundError:
+                pass
 
 
 def create_model_file(path):
     model = create_model()
-    with open(path, "wb") as model_file:
-        model_file.write(serialize_model(model))
+    _write_model_artifacts(((path, serialize_model(model)),))
     return model
 
 
 def create_gguf_model_file(path, model):
-    with open(path, "wb") as model_file:
-        model_file.write(serialize_gguf_model(model))
-
-
-def deserialize_model(buffer):
-    buffer = bytes(buffer)
-    if len(buffer) < HEADER_SIZE or len(buffer) > CONFIG["MAX_FILE_SIZE"] or buffer[:4] != MAGIC:
-        raise ValueError("Invalid DODL model file.")
-    version, _, metadata_size, network_size = struct.unpack_from("<HHII", buffer, 4)
-    if version != CONFIG["VERSION"]:
-        raise ValueError("Unsupported model version.")
-    if HEADER_SIZE + metadata_size + network_size != len(buffer):
-        raise ValueError("Corrupt model size.")
-    metadata_start = HEADER_SIZE
-    try:
-        metadata = json.loads(buffer[metadata_start : metadata_start + metadata_size].decode("utf-8"))
-        if not isinstance(metadata, dict) or metadata.get("version") != version:
-            raise ValueError("Invalid model metadata.")
-        shape = metadata["networkShape"]
-        input_size = shape["inputSize"]
-        hidden_size = shape["hiddenSize"]
-        output_size = shape["outputSize"]
-    except (UnicodeDecodeError, json.JSONDecodeError, KeyError, TypeError) as error:
-        raise ValueError("Invalid DODL model metadata.") from error
-    if any(
-        not isinstance(size, int) or isinstance(size, bool) or size <= 0
-        for size in (input_size, hidden_size, output_size)
-    ):
-        raise ValueError("Invalid network shape.")
-    lengths = (
-        input_size * hidden_size,
-        hidden_size,
-        hidden_size * output_size,
-        output_size,
-    )
-    if network_size != sum(lengths) * 4:
-        raise ValueError("Corrupt model size.")
-    offset = metadata_start + metadata_size
-    arrays = []
-    for length in lengths:
-        values = array("f")
-        values.frombytes(buffer[offset : offset + length * 4])
-        if struct.pack("=I", 1) != struct.pack("<I", 1):
-            values.byteswap()
-        arrays.append(values)
-        offset += length * 4
-    model = {
-        "version": metadata["version"],
-        "id": bytearray(metadata["id"]),
-        "createdAt": metadata["createdAt"],
-        "updatedAt": metadata["updatedAt"],
-        "randomSeed": metadata["randomSeed"],
-        "network": {
-            "inputSize": input_size,
-            "hiddenSize": hidden_size,
-            "outputSize": output_size,
-            "weights1": arrays[0],
-            "bias1": arrays[1],
-            "weights2": arrays[2],
-            "bias2": arrays[3],
-            "policyTrained": metadata.get("policyTrained", False),
-        },
-        "memory": metadata["memory"],
-        "rules": metadata["rules"],
-        "behavior": metadata["behavior"],
-        "state": metadata["state"],
-        "goals": metadata["goals"],
-    }
-    validate_model(model)
-    return model
-
-
-def load_stored_model(storage, key):
-    stored_model = storage.getItem(key) if hasattr(storage, "getItem") else storage.get(key)
-    if not stored_model:
-        return None
-    return deserialize_model(decode_model_from_storage(stored_model))
-
-
-def save_stored_model(storage, key, model):
-    encoded = encode_model_for_storage(serialize_model(model))
-    if hasattr(storage, "setItem"):
-        storage.setItem(key, encoded)
-    else:
-        storage[key] = encoded
+    _write_model_artifacts(((path, serialize_gguf_model(model)),))
 
 
 class AIEngine:
     def __init__(self, model=None, provider=None):
         self.model = model if model is not None else create_model()
+        validate_model(self.model)
         self.provider = provider
         self.random = Random(self.model["randomSeed"])
         stored_network = self.model["network"]
