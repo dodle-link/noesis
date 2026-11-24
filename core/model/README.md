@@ -7,44 +7,56 @@ tags:
 ---
 # Core Model
 
-`me.py` is a stateful Python agent that selects actions using rules, goals, memory, and a trained neural policy. An optional language model can write replies, but the agent controls actions.
+The core model includes a small, stateful Python agent and a separate browser demo. The agent chooses actions using rules, goals, memory, and, when trained, a neural policy. You can connect a language model to write replies, but the local agent still decides what action to take.
 
-## Files in this folder
+Start with [Quick start](#quick-start) to run the agent, [Training](#training) to train a model, or [Pixel controller](#pixel-controller) to try the browser demo.
+
+## Files
 
 - `me.py` implements the Python model, training commands, and DODL/GGUF file support.
-- `model_config.py` holds shared model and file-format limits; `model_formats.py` validates, serializes, and deserializes model data.
+- `model_config.py` defines model and file-format limits. `model_formats.py` validates, reads, and writes model data.
 - `model_providers.py` connects to OpenAI, Gemini, OpenAI-compatible APIs, and remote biocomputation services.
-- `index.html` and `me.js` run the browser-based pixel demo. This demo uses its own steering model; it is separate from the Python agent.
+- `index.html`, `me.js`, and `pixel_model.mjs` run the browser-based pixel demo. It uses its own steering model, separate from the Python agent.
 - `noe-model.dodl` and `noe-model.F32.gguf` are the default Python model files. The `noe-pixel-model` files belong to the pixel demo.
 
 ## Quick start
 
-From this directory, create the default model files:
+The examples below use Python 3 and the standard library. Run them from `core/model` so that imports and relative file paths resolve correctly.
+
+The repository includes `noe-model.dodl`, so you can load it directly:
+
+```python
+from me import AIEngine, load_model_file
+
+engine = AIEngine(load_model_file("noe-model.dodl"))
+result = engine.step({"type": "user_input", "value": "hello"})
+print(result["action"])
+```
+
+`step()` updates the engine's state in memory and returns a snapshot containing the action, state, and other details. To keep the updated state between runs, write the exported model to a file:
+
+```python
+with open("my-model.dodl", "wb") as model_file:
+    model_file.write(engine.export_model())
+```
+
+Load `my-model.dodl` on the next run to continue from that state. Saving to a different file keeps the original model unchanged.
+
+To create a fresh default model instead, run:
 
 ```bash
 python3 me.py
 ```
 
-Load the DODL file and run one step:
-
-```python
-from me import AIEngine, deserialize_model
-
-with open("noe-model.dodl", "rb") as model_file:
-    model = deserialize_model(model_file.read())
-
-engine = AIEngine(model)
-result = engine.step({"type": "user_input", "value": "hello"})
-print(result["action"])
-```
-
-The engine updates its state as it runs. Each `step()` result is an independent snapshot. Save the latest state with `engine.export_model()` when you want to keep those updates.
+This writes `noe-model.dodl` and `noe-model.F32.gguf` in the current directory, replacing files with those names. Run it in another directory if you want to preserve the included files.
 
 ## How it works
 
-Each step reads the input and current state, chooses an action, runs it, and updates the model. Rules and eligible goals can take priority. A model trained with `--train-actions` can use its network to choose among `rest`, `explore`, `learn`, and `observe`. Untrained models keep their existing rules and behavior. Steps update memory, rules, and the outcome self-model, but do not train network weights online.
+Each step reads the input and current state, chooses an action, runs it, and updates the model. Rules and eligible goals can take priority. A model trained with `--train-actions` can use its network to choose among `rest`, `explore`, `learn`, and `observe`. An untrained model uses its existing rules and behavior instead. Steps update memory, rules, and the outcome self-model, but do not train network weights online.
 
-The engine also records a workspace snapshot: what it focused on, which goal was active, recalled episodes, candidate predictions, what it expected, and what happened. Episodes are selected by word overlap and recency, not semantic understanding. When a goal is unmet, learned action effects can guide a choice; explicit non-observe rules still override it, and unknown actions fall back to the existing policy. Matching episodes supply context-specific outcome estimates. The candidate uncertainty and memory uncertainty fields are simple observation-count and lexical-overlap heuristics, not calibrated probabilities. Reply providers receive the selected episodes and the same pre-action workspace; provider analysis does not control actions.
+The engine records a workspace snapshot for each step. This includes the input, active goal, recalled episodes, candidate predictions, expected outcome, and actual outcome. Episodes are selected by word overlap and recency, not semantic understanding.
+
+When a goal is unmet, previously observed action effects can help guide the choice. Explicit non-`observe` rules still take priority, and unknown actions fall back to the existing policy. Uncertainty values are simple heuristics based on observation counts and word overlap, not calibrated probabilities. Reply providers receive the recalled episodes and pre-action workspace; their analysis does not control actions.
 
 These are software traces and decision heuristics, not evidence of subjective experience. Values such as `novelty`, `stress`, `recovery`, and `arousal` are bounded software signals. They are not biological measurements, and the model does not simulate quantum effects or establish consciousness.
 
@@ -58,7 +70,9 @@ From this directory, train the Python model's action policy:
 python3 me.py --train-actions --seed 123
 ```
 
-The command writes `noe-action-model.dodl` and a GGUF companion. It trains on a generated policy and selects checkpoints using 100 fixed validation scenarios. Evaluation also reports results on a separate 100-scenario held-out set, including accuracy and support for each action; held-out results do not affect checkpoint selection. Use `--samples`, `--epochs`, and `--patience` to adjust training, `--output` to choose a file path, and `--seed` to make a run repeatable. The engine uses the trained policy unless a rule or eligible goal takes priority.
+The command writes `noe-action-model.dodl` and `noe-action-model.F32.gguf`, replacing files with those names. It trains on generated examples and chooses a checkpoint using 100 fixed validation scenarios. It also reports accuracy and support for each action on a separate 100-scenario held-out set, which is not used to select the checkpoint.
+
+Use `--samples`, `--epochs`, and `--patience` to adjust training, `--output` to choose a DODL path, and `--seed` to make a run repeatable. The GGUF file uses the same path and base name. Load the trained DODL file to use its policy; rules or eligible goals can still take priority.
 
 Evaluation reports both a majority-class baseline and `rule_baseline_accuracy`. The generated labels are defined by the same threshold policy used by the rule baseline, so a perfect rule-baseline score is expected; compare against real task scenarios before preferring the neural policy.
 
@@ -118,9 +132,9 @@ The browser demo has a separate network that steers a pixel using its position, 
 python3 me.py --train-pixel
 ```
 
-This writes `noe-pixel-model.dodl` without changing `noe-model.dodl`. Training reports validation error and keeps the best weights. You can also use `--samples`, `--epochs`, `--patience`, `--seed`, and `--output` to adjust the run. The browser runs the saved model; it does not train it.
+This writes `noe-pixel-model.dodl` and `noe-pixel-model.F32.gguf`, replacing files with those names but leaving `noe-model.dodl` unchanged. Training reports validation error and keeps the best weights. You can also use `--samples`, `--epochs`, `--patience`, `--seed`, and `--output` to adjust the run. The browser runs the saved DODL model; it does not train it.
 
-To try the browser demo, serve this folder over HTTP:
+To try the browser demo, serve `core/model` over HTTP:
 
 ```bash
 python3 -m http.server 8000
@@ -134,11 +148,11 @@ You can also try the [live demo](https://noesis.dodle.link/model/).
 
 DODL stores the full model: its state, memory, rules, behavior, and network. New workspace fields and training metadata have defaults for older version-2 DODL files. GGUF stores the network tensors, dimensions, training method, feature schema, and tensor-layout metadata, but not the live model state. The `F32` suffix means the GGUF tensors use 32-bit floating-point values. The GGUF file uses Noesis' custom `noesis` architecture and needs a compatible runtime; it is not a general-purpose language model. Older files without provenance are marked `unspecified` when loaded and exported.
 
-The files are binary, not text or JSON. The serializer and loader support files up to 1 MiB and check the file version, dimensions, tensor lengths, and values. Use `create_model_file(path)` to write a DODL model, or pass its returned model to `create_gguf_model_file(path, model)` to write the matching GGUF file. The destination folder must already exist.
+The files are binary, not text or JSON. The serializer and loader support files up to 1 MiB and check the file version, dimensions, tensor lengths, and values. Use `create_model_file(path)` to write a DODL model, then pass the returned model to `create_gguf_model_file(path, model)` if you also need a matching GGUF file. The destination folder must already exist.
 
 ## Use a language model for replies
 
-`LLMProvider` can request replies from OpenAI, Gemini, or an OpenAI-compatible server. It uses Python's standard library, so you do not need a provider SDK. Requests and responses are limited to 1 MiB, and the timeout must be a positive finite number. Provider settings and API keys are read at runtime and are never saved in the model file.
+`LLMProvider` can request replies from OpenAI, Gemini, or an OpenAI-compatible server. It uses Python's standard library, so you do not need a provider SDK. Provider settings and API keys are read at runtime and are never saved in the model file. Requests and responses are limited to 1 MiB; the default timeout is 30 seconds.
 
 For OpenAI, set:
 
@@ -171,17 +185,19 @@ result = engine.respond(
 )
 print(result["reply"])
 
-with open("noe-model.dodl", "wb") as model_file:
+with open("my-model.dodl", "wb") as model_file:
     model_file.write(engine.export_model())
 ```
 
-The provider writes the reply and may return a short analysis. The local engine still chooses and runs the action. Provider request failures raise `LLMProviderError`.
+The provider writes the reply and may return a short analysis. The local engine still chooses and runs the action. `respond()` updates the engine just like `step()`, so export the model if you want to keep the new state. Load `my-model.dodl` in a later run to continue from it. Provider request failures raise `LLMProviderError`.
 
 ## Connect a biocomputation service
 
 `BiocomputationProvider` is a client for a separately deployed gateway. Noesis does not perform biological computation, operate bacteria, or control lab equipment. Connect the gateway to an existing, approved platform; do not expose platform controls directly to model-generated text.
 
-Set `NOESIS_BIOCOMPUTE_URL` and, if needed, `NOESIS_BIOCOMPUTE_API_KEY`. For asynchronous jobs, also set `NOESIS_BIOCOMPUTE_JOBS_URL` to a same-origin URL without a query or fragment. Remote URLs must use HTTPS; HTTP is allowed for localhost development. The key is sent as a bearer token and is not stored in the model. Requests time out after 30 seconds by default and are not retried.
+Set `NOESIS_BIOCOMPUTE_URL` and, if needed, `NOESIS_BIOCOMPUTE_API_KEY`. For asynchronous jobs, also set `NOESIS_BIOCOMPUTE_JOBS_URL` to a same-origin URL without a query or fragment. Remote URLs must use HTTPS; HTTP is allowed for localhost development.
+
+The key is sent as a bearer token and is not stored in the model. Requests time out after 30 seconds by default and are not retried.
 
 Configure an explicit allowlist of platform operations and their input schemas in trusted application code. The provider supports a JSON Schema subset: `type`, `enum`, `properties`, `required`, `additionalProperties`, `items`, length/item limits, and numeric bounds. Unknown operations and extra fields can be rejected before they leave the client. A human approval ID is required for every submission; the gateway must independently verify that approval and the caller's authorization.
 
@@ -189,22 +205,22 @@ Configure an explicit allowlist of platform operations and their input schemas i
 from me import AIEngine, BiocomputationProvider
 
 provider = BiocomputationProvider(
-        operation_schemas={
-                "read-approved-sample": {
-                        "type": "object",
-                        "properties": {
-                                "sample_ref": {"type": "string", "minLength": 1, "maxLength": 128}
-                        },
-                        "required": ["sample_ref"],
-                        "additionalProperties": False,
-                }
+    operation_schemas={
+        "read-approved-sample": {
+            "type": "object",
+            "properties": {
+                "sample_ref": {"type": "string", "minLength": 1, "maxLength": 128}
+            },
+            "required": ["sample_ref"],
+            "additionalProperties": False,
         }
+    }
 )
 engine = AIEngine()
 result = engine.compute_biological(
-        {"operation": "read-approved-sample", "inputs": {"sample_ref": "sample-123"}},
-        provider=provider,
-        approval_id="approval-issued-by-your-review-system",
+    {"operation": "read-approved-sample", "inputs": {"sample_ref": "sample-123"}},
+    provider=provider,
+    approval_id="approval-issued-by-your-review-system",
 )
 print(result["result"])
 ```
