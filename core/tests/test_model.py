@@ -38,6 +38,48 @@ class ModelFileTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.model_module.decode_model_from_storage("not base64!")
 
+    def test_gguf_tensor_layout_reproduces_network_output(self):
+        model = self.model_module.create_model()
+        data = self.model_module.serialize_gguf_model(model)
+        _, tensor_count, metadata_count = struct.unpack_from("<IQQ", data, 4)
+        offset = 24
+        for _ in range(metadata_count):
+            length = struct.unpack_from("<Q", data, offset)[0]
+            offset += 8 + length
+            value_type = struct.unpack_from("<I", data, offset)[0]
+            offset += 4
+            if value_type == 8:
+                length = struct.unpack_from("<Q", data, offset)[0]
+                offset += 8 + length
+            else:
+                self.assertEqual(value_type, 4)
+                offset += 4
+        descriptors = {}
+        for _ in range(tensor_count):
+            length = struct.unpack_from("<Q", data, offset)[0]
+            offset += 8
+            name = data[offset:offset + length].decode("utf-8")
+            offset += length
+            rank = struct.unpack_from("<I", data, offset)[0]
+            offset += 4
+            dimensions = struct.unpack_from(f"<{rank}Q", data, offset)
+            offset += rank * 8
+            tensor_type, tensor_offset = struct.unpack_from("<IQ", data, offset)
+            offset += 12
+            self.assertEqual(tensor_type, 0)
+            descriptors[name] = (dimensions, tensor_offset)
+        data_start = offset + (-offset % 32)
+        restored = self.model_module.copy.deepcopy(model)
+        for key in ("weights1", "bias1", "weights2", "bias2"):
+            dimensions, tensor_offset = descriptors[f"network.{key}"]
+            count = math.prod(dimensions)
+            values = struct.unpack_from(f"<{count}f", data, data_start + tensor_offset)
+            restored["network"][key] = self.model_module.array("f", values)
+        inputs = self.model_module.array("f", [0.25] * model["network"]["inputSize"])
+        original_output = self.model_module._network_from_model(model).forward(inputs)["output"]
+        restored_output = self.model_module._network_from_model(restored).forward(inputs)["output"]
+        self.assertEqual(original_output, restored_output)
+
     def _biocomputation_provider(self, endpoint="https://bio.example.test/compute", **kwargs):
         kwargs.setdefault("operation_schemas", {"example": {"type": "object"}})
         return self.model_module.BiocomputationProvider(endpoint, **kwargs)
@@ -172,6 +214,45 @@ class ModelFileTests(unittest.TestCase):
                 self.assertEqual(model_file.read(), b"previous dodl")
             with open(gguf_path, "rb") as model_file:
                 self.assertEqual(model_file.read(), b"previous gguf")
+
+    def test_demonstration_training_and_held_out_scenarios(self):
+        def episode(energy, text):
+            return {
+                "initial_state": {"energy": energy, "confidence": 50},
+                "inputs": [{"type": "user_input", "value": text}, None],
+                "actions": ["learn", "learn"],
+                "objectives": {"confidence": {"min": 60}, "energy": {"min": 20}},
+            }
+
+        training = [episode(80, "training")]
+        validation = [episode(75, "validation")]
+        test = episode(70, "held out")
+        test.pop("actions")
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "demonstrations.dodl")
+            model, report = self.model_module.train_action_model_from_episodes(
+                path, training, validation, test_scenarios=[test], epochs=3, seed=7
+            )
+            restored = self.model_module.load_model_file(path)
+            with open(os.path.join(directory, "demonstrations.F32.gguf"), "rb") as model_file:
+                gguf = model_file.read()
+            self.assertEqual(restored["network"]["trainingMethod"], "demonstrations-v1")
+            self.assertEqual(restored["network"]["featureSchema"], "action-state-text-v1")
+            self.assertIn(b"demonstrations-v1", gguf)
+            self.assertTrue(model["network"]["policyTrained"])
+            self.assertEqual(set(report["test_scenarios"]), {"prediction", "policy", "rule_baseline"})
+            self.assertIn("mean_prediction_error", report["test_scenarios"]["prediction"])
+            with self.assertRaisesRegex(ValueError, "distinct"):
+                self.model_module.train_action_model_from_episodes(path, training, training)
+            with self.assertRaisesRegex(ValueError, "Test scenarios must be distinct"):
+                self.model_module.train_action_model_from_episodes(path, training, validation, test_scenarios=[training[0]])
+            invalid = episode(80, "invalid")
+            invalid["objectives"]["confidence"]["min"] = 90
+            with self.assertRaisesRegex(ValueError, "does not satisfy"):
+                self.model_module.train_action_model_from_episodes(path, [invalid], validation)
+            invalid = episode(10, "override")
+            with self.assertRaisesRegex(ValueError, "conflicts with a rule"):
+                self.model_module.train_action_model_from_episodes(path, [invalid], validation)
 
     def test_trained_policy_selects_action_but_explicit_rules_still_override(self):
         model = self.model_module.create_model()
@@ -558,10 +639,13 @@ console.log(JSON.stringify(Array.from(output)));
         version, tensor_count, metadata_count = struct.unpack_from("<IQQ", gguf_data, 4)
         self.assertEqual(version, 3)
         self.assertEqual(tensor_count, 4)
-        self.assertEqual(metadata_count, 8)
+        self.assertEqual(metadata_count, 12)
         self.assertIn(b"noesis.workspace_version", gguf_data)
         self.assertIn(b"noesis.workspace_format", gguf_data)
         self.assertIn(b"cycle_snapshot", gguf_data)
+        self.assertIn(b"noesis.training_method", gguf_data)
+        self.assertIn(b"noesis.feature_schema", gguf_data)
+        self.assertIn(b"output-major-f32", gguf_data)
         metadata_offset = 24
         first_key_size = struct.unpack_from("<Q", gguf_data, metadata_offset)[0]
         metadata_offset += 8
@@ -1086,10 +1170,11 @@ console.log(JSON.stringify(Array.from(output)));
         first = engine.step({"type": "user_input", "value": "hello"})
         second = engine.step({"type": "user_input", "value": "again"})
 
-        self.assertEqual(first["prediction"]["absoluteError"], 1 / 3)
+        self.assertEqual(first["prediction"]["absoluteError"], 2 / 3)
         self.assertEqual(second["prediction"]["absoluteError"], 0)
         self.assertEqual(engine.get_state()["selfModel"]["predictionCount"], 2)
         self.assertEqual(engine.get_state()["selfModel"]["actions"]["observe"]["count"], 2)
+        self.assertEqual(first["workspace"]["outcome"]["curiosity"], first["state"]["curiosity"])
 
         restored = self.model_module.AIEngine.import_model(engine.export_model())
         self.assertEqual(
@@ -1107,6 +1192,11 @@ console.log(JSON.stringify(Array.from(output)));
         self.assertEqual(engine.get_state()["selfModel"]["actions"], {})
         self.assertEqual(engine.get_state()["workspace"]["focus"], "idle")
         self.assertEqual(engine.get_state()["bioSignals"]["recovery"], 0.5)
+
+        model["state"]["selfModel"] = {"actions": {}}
+        engine = self.model_module.AIEngine(model)
+        engine.step(None)
+        self.assertEqual(engine.get_state()["selfModel"]["predictionCount"], 1)
 
     def test_engine_broadcasts_cycle_to_persistent_workspace(self):
         model = self.model_module.create_model()
@@ -1147,6 +1237,62 @@ console.log(JSON.stringify(Array.from(output)));
         self.assertEqual(result["workspace"]["goal"], "learn")
         self.assertEqual(result["action"]["type"], "learn")
         self.assertEqual(result["workspace"]["broadcast"]["outcome"]["confidence"], 25)
+
+    def test_goal_selection_uses_learned_action_outcomes(self):
+        model = self.model_module.create_model()
+        model["state"]["confidence"] = 20
+        model["goals"] = [{"id": "learn", "priority": 40, "target": {"confidenceMin": 50}}]
+        model["state"]["selfModel"]["actions"] = {
+            "observe": {"count": 4, "meanDelta": {"energy": -1, "curiosity": 0, "confidence": 8}},
+            "learn": {"count": 4, "meanDelta": {"energy": -3, "curiosity": 0, "confidence": 0}},
+        }
+        engine = self.model_module.AIEngine(model)
+
+        result = engine.step({"type": "user_input", "value": "learn"})
+
+        self.assertEqual(result["action"]["type"], "observe")
+        self.assertEqual(result["workspace"]["prediction"]["confidence"], 28)
+        self.assertEqual(result["workspace"]["candidates"][0]["action"], "learn")
+        self.assertEqual(result["workspace"]["broadcast"]["candidates"], result["workspace"]["candidates"])
+
+    def test_workspace_retrieves_episodes_for_predictions_and_provider(self):
+        class FakeProvider:
+            def generate(self, user_input, state, memories):
+                self.state = state
+                self.memories = memories
+                return "ok"
+
+        provider = FakeProvider()
+        engine = self.model_module.AIEngine(provider=provider)
+        engine.step({"type": "user_input", "value": "shared topic"})
+        result = engine.respond({"type": "user_input", "value": "shared topic"})
+
+        matches = result["workspace"]["memories"]
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["relevance"], 1)
+        self.assertEqual(matches[0]["uncertainty"], 0)
+        self.assertEqual(provider.memories[0], matches[0]["episode"])
+        self.assertEqual(provider.state["workspace"]["memories"], matches)
+        self.assertEqual(result["workspace"]["broadcast"]["memories"], matches)
+        self.assertEqual(result["prediction"]["absoluteError"], 0)
+        restored = self.model_module.AIEngine.import_model(engine.export_model())
+        self.assertEqual(restored.get_state()["workspace"], result["workspace"])
+
+    def test_recalled_episode_changes_prediction_informed_choice(self):
+        model = self.model_module.create_model()
+        model["state"]["confidence"] = 20
+        model["goals"] = [{"id": "learn", "priority": 40, "target": {"confidenceMin": 50}}]
+        model["state"]["selfModel"]["actions"] = {
+            "observe": {"count": 4, "meanDelta": {"energy": -1, "curiosity": 0, "confidence": 2}},
+            "learn": {"count": 4, "meanDelta": {"energy": -3, "curiosity": 0, "confidence": 8}},
+        }
+        engine = self.model_module.AIEngine(model)
+        engine.memory.add({"input": {"type": "user_input", "value": "special topic"},
+                           "action": "observe", "previousState": {"energy": 72, "curiosity": 50, "confidence": 20},
+                           "outcome": {"energy": 71, "curiosity": 50, "confidence": 32}})
+        workspace = engine.open_workspace(engine.observe({"type": "user_input", "value": "special topic"}))
+        self.assertEqual(engine.select_predicted_action(), "learn")
+        self.assertEqual(engine.select_predicted_action(workspace), "observe")
 
     def test_bio_signals_gate_goal_actions_and_remain_bounded(self):
         model = self.model_module.create_model()

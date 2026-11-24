@@ -44,7 +44,9 @@ The engine updates its state as it runs. Each `step()` result is an independent 
 
 Each step reads the input and current state, chooses an action, runs it, and updates the model. Rules and eligible goals can take priority. A model trained with `--train-actions` can use its network to choose among `rest`, `explore`, `learn`, and `observe`. Untrained models keep their existing rules and behavior. Steps update memory, rules, and the outcome self-model, but do not train network weights online.
 
-The engine also records a workspace snapshot: what it focused on, which goal was active, what it expected, and what happened. This is a software trace, not evidence of subjective experience. Values such as `novelty`, `stress`, `recovery`, and `arousal` are bounded software signals. They are not biological measurements, and the model does not simulate quantum effects or establish consciousness.
+The engine also records a workspace snapshot: what it focused on, which goal was active, recalled episodes, candidate predictions, what it expected, and what happened. Episodes are selected by word overlap and recency, not semantic understanding. When a goal is unmet, learned action effects can guide a choice; explicit non-observe rules still override it, and unknown actions fall back to the existing policy. Matching episodes supply context-specific outcome estimates. The candidate uncertainty and memory uncertainty fields are simple observation-count and lexical-overlap heuristics, not calibrated probabilities. Reply providers receive the selected episodes and the same pre-action workspace; provider analysis does not control actions.
+
+These are software traces and decision heuristics, not evidence of subjective experience. Values such as `novelty`, `stress`, `recovery`, and `arousal` are bounded software signals. They are not biological measurements, and the model does not simulate quantum effects or establish consciousness.
 
 ## Training
 
@@ -60,7 +62,7 @@ The command writes `noe-action-model.dodl` and a GGUF companion. It trains on a 
 
 Evaluation reports both a majority-class baseline and `rule_baseline_accuracy`. The generated labels are defined by the same threshold policy used by the rule baseline, so a perfect rule-baseline score is expected; compare against real task scenarios before preferring the neural policy.
 
-Use `evaluate_action_scenarios` to compare a trained model against that threshold baseline on multi-step tasks. Both run through the same engine, including rule and goal overrides. Supply representative task inputs, starting state values, and measurable final-state objectives. For example, this is a synthetic illustration, not evidence of real-world performance:
+Use `evaluate_action_scenarios` to compare prediction-informed decisions (`prediction`), the policy without prediction-based selection (`policy`), and the threshold baseline (`rule_baseline`) on multi-step tasks. All run through the same engine, including rule and goal overrides. Supply representative task inputs, starting state values, optional `goals`, and measurable final-state objectives. For example, this is a synthetic illustration, not evidence of real-world performance:
 
 ```python
 from me import evaluate_action_scenarios, load_model_file
@@ -73,10 +75,40 @@ scenarios = [{
     "objectives": {"confidence": {"min": 55}, "energy": {"min": 20}},
 }]
 results = evaluate_action_scenarios(model, scenarios)
-print(results["policy"]["success_rate"], results["rule_baseline"]["success_rate"])
+print(results["prediction"]["success_rate"], results["policy"]["success_rate"],
+    results["rule_baseline"]["success_rate"])
 ```
 
-Objectives support `min` and `max` bounds on final `energy`, `curiosity`, `confidence`, and `stability`. Results include success rates, mean total reward, and each scenario's actions, minimum energy, final state, and success. The evaluator copies the model for each run. Its reward and state objectives measure this simulation only; representative tasks and independent outcome criteria are still needed to assess usefulness.
+Objectives support `min` and `max` bounds on final `energy`, `curiosity`, `confidence`, and `stability`. Results include success rates, mean total reward, mean prediction error, and each scenario's actions, minimum energy, final state, and success. The evaluator copies the model for each run. Its reward and state objectives measure this simulation only; representative tasks and independent outcome criteria are still needed to assess usefulness.
+
+### Train from task demonstrations
+
+`train_action_model_from_episodes` trains on caller-supplied multi-step demonstrations instead of threshold labels. Each episode supplies `initial_state`, `inputs`, `actions`, and final-state `objectives`; `goals` is optional. The trainer replays each demonstration, rejects rule conflicts and failed objectives, selects weights using separate validation demonstrations, and can evaluate a separate test set after selection. For example:
+
+```python
+from me import train_action_model_from_episodes
+
+def episode(energy, text):
+    return {
+        "initial_state": {"energy": energy, "confidence": 50},
+        "inputs": [{"type": "user_input", "value": text}, None],
+        "actions": ["learn", "learn"],
+        "objectives": {"confidence": {"min": 60}, "energy": {"min": 20}},
+    }
+
+training = [episode(80, "training task")]
+validation = [episode(75, "validation task")]
+test = episode(70, "held out task")
+del test["actions"]
+model, report = train_action_model_from_episodes(
+    "noe-demonstration-model.dodl", training, validation,
+    test_scenarios=[test], epochs=20, seed=7,
+)
+print(report["validation"]["accuracy"])
+print(report["test_scenarios"]["prediction"]["success_rate"])
+```
+
+This example is intentionally small and synthetic; it does not establish generalization. Supply larger, representative demonstrations and independently designed validation and held-out tasks, including conflicting goals. The trainer rejects exact duplicate scenarios across the sets, but cannot detect subtler data leakage. The network still sees only its encoded state and input, not a full workspace; the runtime handles workspace-based planning separately.
 
 ### Pixel controller
 
@@ -100,7 +132,7 @@ You can also try the [live demo](https://noesis.dodle.link/model/).
 
 ## Model files
 
-DODL stores the full model: its state, memory, rules, behavior, and network. GGUF stores the network tensors and dimensions, but not the live model state. The `F32` suffix means the GGUF tensors use 32-bit floating-point values. The GGUF file uses Noesis' custom `noesis` architecture and needs a compatible runtime.
+DODL stores the full model: its state, memory, rules, behavior, and network. New workspace fields and training metadata have defaults for older version-2 DODL files. GGUF stores the network tensors, dimensions, training method, feature schema, and tensor-layout metadata, but not the live model state. The `F32` suffix means the GGUF tensors use 32-bit floating-point values. The GGUF file uses Noesis' custom `noesis` architecture and needs a compatible runtime; it is not a general-purpose language model. Older files without provenance are marked `unspecified` when loaded and exported.
 
 The files are binary, not text or JSON. The serializer and loader support files up to 1 MiB and check the file version, dimensions, tensor lengths, and values. Use `create_model_file(path)` to write a DODL model, or pass its returned model to `create_gguf_model_file(path, model)` to write the matching GGUF file. The destination folder must already exist.
 

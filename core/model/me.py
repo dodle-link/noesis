@@ -113,6 +113,7 @@ def create_initial_bio_signals():
 
 def create_initial_workspace():
     return {
+        "version": 2,
         "cycle": 0,
         "focus": "idle",
         "externalInput": None,
@@ -123,6 +124,7 @@ def create_initial_workspace():
         "prediction": None,
         "outcome": None,
         "predictionError": 0.0,
+        "memories": [],
         "broadcast": {},
     }
 
@@ -405,7 +407,7 @@ def _action_policy_metrics(network, examples):
     sample_count = len(examples)
     return {
         "accuracy": correct / sample_count,
-        "baseline_accuracy": sum(class_totals[label] for label in ACTION_LABELS if label == "observe") / sample_count,
+        "baseline_accuracy": max(class_totals.values()) / sample_count,
         "rule_baseline_accuracy": rule_baseline_correct / sample_count,
         "mse": squared_error / (sample_count * len(ACTION_LABELS)),
         "per_action_accuracy": {
@@ -528,6 +530,8 @@ def train_action_model(
         "weights2": network.weights2,
         "bias2": network.bias2,
         "policyTrained": True,
+        "trainingMethod": "threshold-imitation-v1",
+        "featureSchema": "action-state-text-v1",
     }
     model["updatedAt"] = now()
     gguf_path = os.path.splitext(os.fsdecode(path))[0] + ".F32.gguf"
@@ -605,6 +609,8 @@ def train_pixel_model(
         "bias1": network.bias1,
         "weights2": network.weights2,
         "bias2": network.bias2,
+        "trainingMethod": "pixel-steering-v1",
+        "featureSchema": "pixel-steering-v1",
     }
     model["updatedAt"] = now()
     gguf_path = os.path.splitext(os.fsdecode(path))[0] + ".F32.gguf"
@@ -619,8 +625,7 @@ class MemoryStore:
         self.items = memory if memory is not None else []
 
     def add(self, memory):
-        self.items.append(
-            {
+        item = {
                 "id": uuid_bytes(),
                 "timestamp": now(),
                 "input": memory.get("input"),
@@ -629,7 +634,10 @@ class MemoryStore:
                 "reward": memory.get("reward"),
                 "importance": clamp(memory.get("importance", 50), 0, 100),
             }
-        )
+        for key in ("previousState", "prediction", "outcome"):
+            if key in memory:
+                item[key] = copy.deepcopy(memory[key])
+        self.items.append(item)
         self.limit()
 
     def limit(self):
@@ -641,6 +649,31 @@ class MemoryStore:
 
     def get_recent(self, count=10):
         return self.items[-count:]
+
+    def recall(self, input_value, count=3):
+        text = input_value.get("value") if isinstance(input_value, dict) else None
+        tokens = set(text.lower().split()) if isinstance(text, str) else set()
+        if not tokens:
+            return []
+        matches = []
+        for index, item in enumerate(self.items):
+            stored_input = item.get("input")
+            stored_text = stored_input.get("value") if isinstance(stored_input, dict) else None
+            if not isinstance(stored_text, str):
+                continue
+            stored_tokens = set(stored_text.lower().split())
+            overlap = len(tokens & stored_tokens)
+            if not overlap:
+                continue
+            relevance = overlap / len(tokens | stored_tokens)
+            recency = (index + 1) / max(len(self.items), 1)
+            matches.append((relevance, recency, item))
+        matches.sort(key=lambda match: (match[0], match[1]), reverse=True)
+        return [
+            {"episode": copy.deepcopy(item), "relevance": relevance,
+             "recency": recency, "uncertainty": 1 - relevance}
+            for relevance, recency, item in matches[:count]
+        ]
 
     def clear(self):
         self.items.clear()
@@ -796,6 +829,8 @@ def create_model():
             "weights2": network.weights2,
             "bias2": network.bias2,
             "policyTrained": False,
+            "trainingMethod": "untrained",
+            "featureSchema": "action-state-text-v1",
         },
         "memory": [],
         "rules": create_initial_rules(),
@@ -960,6 +995,12 @@ def merge_models(model_a, model_b, alpha=0.5):
         network_a.get("policyTrained", False)
         and network_b.get("policyTrained", False)
     )
+    merged["network"]["trainingMethod"] = "weight-merge-v1"
+    merged["network"]["featureSchema"] = (
+        network_a.get("featureSchema", "unspecified")
+        if network_a.get("featureSchema") == network_b.get("featureSchema")
+        else "unspecified"
+    )
 
     return merged
 
@@ -1019,7 +1060,9 @@ class AIEngine:
         bio_signals = self.state.setdefault("bioSignals", create_initial_bio_signals())
         for key, value in create_initial_bio_signals().items():
             bio_signals.setdefault(key, value)
-        self.state.setdefault("selfModel", create_initial_self_model())
+        self_model = self.state.setdefault("selfModel", create_initial_self_model())
+        for key, value in create_initial_self_model().items():
+            self_model.setdefault(key, value)
         self.workspace = self.state.setdefault("workspace", create_initial_workspace())
         self.goals = self.model["goals"]
 
@@ -1104,7 +1147,7 @@ class AIEngine:
             signals["novelty"] * 0.6 + signals["stress"] * 0.4, 0, 1
         )
 
-    def open_workspace(self, perception):
+    def open_workspace(self, perception, persist=True):
         input_value = perception["input"]
         focus = input_value.get("type", "input") if isinstance(input_value, dict) else "input"
         salient_goal = None
@@ -1123,7 +1166,8 @@ class AIEngine:
             if score > highest_score:
                 highest_score = score
                 salient_goal = goal.get("id")
-        self.workspace = {
+        workspace = {
+            "version": 2,
             "cycle": self.state["cycle"] + 1,
             "focus": focus,
             "externalInput": copy.deepcopy(input_value),
@@ -1137,16 +1181,22 @@ class AIEngine:
             "prediction": None,
             "outcome": None,
             "predictionError": 0.0,
+            "memories": self.memory.recall(input_value),
             "broadcast": {},
         }
-        self.state["workspace"] = self.workspace
-        return self.workspace
+        if persist:
+            self.workspace = workspace
+            self.state["workspace"] = workspace
+        return workspace
 
     def decide(self, perception, workspace=None):
         rule = self.rules.select(self.state)
         default_action = rule is None or rule["action"]["type"] == "observe"
         signals = self.state["bioSignals"]
         if workspace and default_action and signals["stress"] < 0.75 and signals["recovery"] > 0.1:
+            predicted_action = self.select_predicted_action(workspace)
+            if predicted_action is not None:
+                return {"type": predicted_action, "ruleId": None}
             if workspace.get("goal") == "learn":
                 return {"type": "learn", "ruleId": None}
             if workspace.get("goal") == "explore" and signals["novelty"] >= 0.7:
@@ -1159,16 +1209,71 @@ class AIEngine:
             return {"type": rule["action"]["type"], "ruleId": rule["id"]}
         return {"type": self.behavior.run(self.state), "ruleId": None}
 
+    def select_predicted_action(self, workspace=None):
+        best_action = None
+        best_score = 0.0
+        if workspace is not None:
+            workspace["candidates"] = []
+        for action_type in ACTION_LABELS:
+            action_model = self.state["selfModel"]["actions"].get(action_type, {})
+            count = action_model.get("count", 0)
+            if count <= 0:
+                continue
+            prediction = self.predict_action({"type": action_type}, workspace)
+            if prediction["energy"] < 20:
+                continue
+            score = 0.0
+            for goal in self.goals:
+                for key, target in goal.get("target", {}).items():
+                    state_key = key[:-3] if key.endswith("Min") else key
+                    if state_key not in prediction:
+                        continue
+                    before = max(0, target - self.state[state_key])
+                    after = max(0, target - prediction[state_key])
+                    score += goal.get("priority", 0) * (before - after)
+            score *= count / (count + 1)
+            if workspace is not None:
+                workspace["candidates"].append({
+                    "action": action_type, "prediction": prediction,
+                    "observations": count, "uncertainty": 1 / (count + 1),
+                    "goalScore": score,
+                })
+            if score > best_score:
+                best_action = action_type
+                best_score = score
+        return best_action
+
     def _policy_action(self, perception):
         outputs = self.network.forward(self.encode_input(perception["input"]))["output"]
         return ACTION_LABELS[max(range(len(ACTION_LABELS)), key=lambda index: outputs[index])]
 
-    def predict_action(self, action):
+    def predict_action(self, action, workspace=None):
         action_model = self.state["selfModel"]["actions"].get(action["type"], {})
         mean_delta = action_model.get("meanDelta", {})
+        metrics = ("energy", "curiosity", "confidence")
+        episodes = []
+        for match in (workspace or {}).get("memories", []):
+            episode = match["episode"]
+            previous = episode.get("previousState")
+            outcome = episode.get("outcome")
+            if episode.get("action") != action["type"] or not isinstance(previous, dict) or not isinstance(outcome, dict):
+                continue
+            if all(
+                isinstance(values.get(key), (int, float))
+                and not isinstance(values[key], bool)
+                and math.isfinite(values[key])
+                for values in (previous, outcome) for key in metrics
+            ):
+                episodes.append(episode)
+        if episodes:
+            mean_delta = {
+                key: sum(episode["outcome"][key] - episode["previousState"][key]
+                         for episode in episodes) / len(episodes)
+                for key in metrics
+            }
         return {
             key: clamp(self.state[key] + mean_delta.get(key, 0), 0, 100)
-            for key in ("energy", "curiosity", "confidence")
+            for key in metrics
         }
 
     def update_self_model(self, action, previous_state, prediction):
@@ -1230,6 +1335,12 @@ class AIEngine:
                 "result": evaluation["result"],
                 "reward": evaluation["reward"],
                 "importance": abs(evaluation["reward"]) * 50 + 50,
+                "previousState": {
+                    key: evaluation["perception"]["state"][key]
+                    for key in ("energy", "curiosity", "confidence")
+                },
+                "prediction": self.workspace["prediction"],
+                "outcome": self.workspace["outcome"],
             }
         )
         if self.random.next() < 0.05:
@@ -1244,20 +1355,27 @@ class AIEngine:
         self.state["curiosity"] += 1 if evaluation["reward"] > 0 else -1
         self.state["curiosity"] = clamp(self.state["curiosity"], 0, 100)
 
-    def step(self, input_value, provider_analysis=None):
+    def step(self, input_value, provider_analysis=None, workspace=None):
         perception = self.observe(input_value)
         self.sense_bio_signals(input_value)
         input_vector = self.encode_input(perception["input"])
         interpretation = self.interpret(perception, input_vector)
-        workspace = self.open_workspace(perception)
+        if workspace is None:
+            workspace = self.open_workspace(perception)
+        else:
+            workspace = copy.deepcopy(workspace)
+            self.workspace = workspace
+            self.state["workspace"] = workspace
         workspace["providerAnalysis"] = copy.deepcopy(provider_analysis)
         workspace["internalState"]["bioSignals"] = copy.deepcopy(self.state["bioSignals"])
         action = self.decide(perception, workspace)
-        prediction = self.predict_action(action)
+        prediction = self.predict_action(action, workspace)
         workspace["intention"] = action["type"]
         workspace["prediction"] = prediction
         result = self.execute(action)
         self.apply_action_to_bio_signals(action)
+        evaluation = self.evaluate(perception, action, result)
+        self.update_state(evaluation)
         prediction_result = self.update_self_model(action, perception["state"], prediction)
         workspace["outcome"] = prediction_result["observed"]
         workspace["predictionError"] = prediction_result["absoluteError"]
@@ -1270,11 +1388,11 @@ class AIEngine:
             "prediction": workspace["prediction"],
             "outcome": workspace["outcome"],
             "predictionError": workspace["predictionError"],
+            "memories": workspace["memories"],
+            "candidates": workspace.get("candidates", []),
             "bioSignals": copy.deepcopy(self.state["bioSignals"]),
         }
-        evaluation = self.evaluate(perception, action, result)
         self.learn(evaluation, input_vector)
-        self.update_state(evaluation)
         self.sync_model()
         return copy.deepcopy({
             "perception": perception,
@@ -1290,17 +1408,20 @@ class AIEngine:
     def respond(self, input_value, provider=None):
         """Generate a provider reply, then run one local engine step."""
         active_provider = provider or self.provider or LLMProvider()
+        workspace = self.open_workspace(self.observe(input_value), persist=False)
+        provider_state = copy.deepcopy(self.state)
+        provider_state["workspace"] = copy.deepcopy(workspace)
         provider_context = {
             "user_input": input_value,
-            "state": dict(self.state),
-            "memories": self.memory.get_recent(5),
+            "state": provider_state,
+            "memories": [match["episode"] for match in workspace["memories"]],
         }
         if hasattr(active_provider, "generate_with_analysis"):
             provider_response = active_provider.generate_with_analysis(**provider_context)
         else:
             provider_response = active_provider.generate(**provider_context)
         normalized = normalize_provider_response(provider_response)
-        result = self.step(input_value, provider_analysis=normalized["analysis"])
+        result = self.step(input_value, provider_analysis=normalized["analysis"], workspace=workspace)
         result["reply"] = normalized["reply"]
         return result
 
@@ -1352,7 +1473,7 @@ class AIEngine:
 
 
 def evaluate_action_scenarios(model, scenarios):
-    """Compare a trained policy and the threshold baseline on caller-supplied tasks."""
+    """Compare prediction-informed, policy-only, and threshold-baseline behavior."""
     if not isinstance(model, dict):
         model = load_model_file(model)
     validate_model(model)
@@ -1361,14 +1482,18 @@ def evaluate_action_scenarios(model, scenarios):
     if not isinstance(scenarios, list) or not scenarios:
         raise ValueError("scenarios must be a non-empty list.")
 
-    class BaselineEngine(AIEngine):
+    class PolicyEngine(AIEngine):
+        def select_predicted_action(self, workspace=None):
+            return None
+
+    class BaselineEngine(PolicyEngine):
         def _policy_action(self, perception):
             return _action_policy_target(
                 self.state["energy"], self.state["curiosity"], self.state["confidence"]
             )
 
     state_keys = ("energy", "curiosity", "confidence", "stability")
-    runs = {"policy": [], "rule_baseline": []}
+    runs = {"prediction": [], "policy": [], "rule_baseline": []}
     for scenario in scenarios:
         if not isinstance(scenario, dict):
             raise ValueError("Each scenario must be an object.")
@@ -1393,16 +1518,22 @@ def evaluate_action_scenarios(model, scenarios):
             if "min" in bounds and "max" in bounds and bounds["min"] > bounds["max"]:
                 raise ValueError("Objective min cannot exceed max.")
 
-        for label, engine_type in (("policy", AIEngine), ("rule_baseline", BaselineEngine)):
-            engine = engine_type(copy.deepcopy(model))
+        scenario_model = copy.deepcopy(model)
+        if "goals" in scenario:
+            scenario_model["goals"] = copy.deepcopy(scenario["goals"])
+            validate_model(scenario_model)
+        for label, engine_type in (("prediction", AIEngine), ("policy", PolicyEngine), ("rule_baseline", BaselineEngine)):
+            engine = engine_type(copy.deepcopy(scenario_model))
             engine.state.update(initial)
             actions = []
             total_reward = 0.0
+            prediction_error = 0.0
             minimum_energy = engine.state["energy"]
             for input_value in inputs:
                 result = engine.step(copy.deepcopy(input_value))
                 actions.append(result["action"]["type"])
                 total_reward += result["evaluation"]["reward"]
+                prediction_error += result["prediction"]["absoluteError"]
                 minimum_energy = min(minimum_energy, result["state"]["energy"])
             final_state = {key: engine.state[key] for key in state_keys}
             succeeded = all(
@@ -1413,6 +1544,7 @@ def evaluate_action_scenarios(model, scenarios):
             runs[label].append({
                 "actions": actions,
                 "total_reward": total_reward,
+                "mean_prediction_error": prediction_error / len(inputs),
                 "minimum_energy": minimum_energy,
                 "final_state": final_state,
                 "success": succeeded,
@@ -1421,10 +1553,119 @@ def evaluate_action_scenarios(model, scenarios):
         label: {
             "success_rate": sum(run["success"] for run in results) / len(results),
             "mean_total_reward": sum(run["total_reward"] for run in results) / len(results),
+            "mean_prediction_error": sum(run["mean_prediction_error"] for run in results) / len(results),
             "scenarios": results,
         }
         for label, results in runs.items()
     }
+
+
+def train_action_model_from_episodes(path, training_episodes, validation_episodes, *, test_scenarios=None, epochs=20, seed=1):
+    """Train on successful caller-provided demonstrations, validated on separate episodes."""
+    if not isinstance(epochs, int) or isinstance(epochs, bool) or epochs < 1:
+        raise ValueError("epochs must be a positive integer.")
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise ValueError("seed must be an integer.")
+    if any(not isinstance(episodes, list) or not episodes for episodes in (training_episodes, validation_episodes)):
+        raise ValueError("Training and validation episodes must be non-empty lists.")
+    if any(not isinstance(episode, dict) for episode in training_episodes + validation_episodes):
+        raise ValueError("Each episode must be an object.")
+    try:
+        training_ids = {json.dumps(episode, sort_keys=True, allow_nan=False) for episode in training_episodes}
+        validation_ids = {json.dumps(episode, sort_keys=True, allow_nan=False) for episode in validation_episodes}
+    except (TypeError, ValueError) as error:
+        raise ValueError("Episodes must contain finite JSON values.") from error
+    if training_ids & validation_ids:
+        raise ValueError("Training and validation episodes must be distinct.")
+    def scenario_id(episode):
+        return json.dumps(
+            {key: episode.get(key, {} if key in ("initial_state", "goals") else None)
+             for key in ("initial_state", "inputs", "objectives", "goals")},
+            sort_keys=True, allow_nan=False,
+        )
+
+    if {scenario_id(episode) for episode in training_episodes} & {scenario_id(episode) for episode in validation_episodes}:
+        raise ValueError("Training and validation scenarios must be distinct.")
+    if test_scenarios is not None:
+        if not isinstance(test_scenarios, list) or not test_scenarios or any(not isinstance(item, dict) for item in test_scenarios):
+            raise ValueError("test_scenarios must be a non-empty list of objects.")
+        try:
+            used = {scenario_id(episode) for episode in training_episodes + validation_episodes}
+            if any(scenario_id(scenario) in used for scenario in test_scenarios):
+                raise ValueError("Test scenarios must be distinct from training and validation episodes.")
+        except (TypeError, AttributeError) as error:
+            raise ValueError("Scenarios must contain finite JSON values.") from error
+
+    class DemonstrationEngine(AIEngine):
+        def decide(self, perception, workspace=None):
+            rule = self.rules.select(self.state)
+            if rule and rule["action"]["type"] != "observe":
+                if rule["action"]["type"] != self.demonstrated_action:
+                    raise ValueError("A demonstrated action conflicts with a rule override.")
+                return {"type": self.demonstrated_action, "ruleId": rule["id"]}
+            return {"type": self.demonstrated_action, "ruleId": None}
+
+    template = create_model()
+    template["network"]["policyTrained"] = True
+
+    def collect(episodes):
+        examples = []
+        for episode in episodes:
+            if not isinstance(episode, dict):
+                raise ValueError("Each episode must be an object.")
+            inputs = episode.get("inputs")
+            actions = episode.get("actions")
+            if not isinstance(inputs, list) or not isinstance(actions, list) or len(inputs) != len(actions) or not inputs:
+                raise ValueError("Episode inputs and actions must be non-empty lists of equal length.")
+            if any(action not in ACTION_LABELS for action in actions):
+                raise ValueError("Episode contains an unsupported action.")
+            scenario = {key: episode[key] for key in ("initial_state", "inputs", "objectives", "goals") if key in episode}
+            evaluate_action_scenarios(template, [scenario])
+            model = copy.deepcopy(template)
+            if "goals" in episode:
+                model["goals"] = copy.deepcopy(episode["goals"])
+            engine = DemonstrationEngine(model)
+            engine.state.update(episode.get("initial_state", {}))
+            for input_value, action in zip(inputs, actions):
+                examples.append((engine.encode_input(input_value), action))
+                engine.demonstrated_action = action
+                engine.step(copy.deepcopy(input_value))
+            for key, bounds in episode["objectives"].items():
+                if ("min" in bounds and engine.state[key] < bounds["min"]) or ("max" in bounds and engine.state[key] > bounds["max"]):
+                    raise ValueError("Demonstration does not satisfy its final-state objectives.")
+        return examples
+
+    examples = collect(training_episodes)
+    validation = collect(validation_episodes)
+    random = Random(seed)
+    network = TinyNetwork(random)
+    best_weights = None
+    best_score = (-1.0, float("-inf"))
+    for _ in range(epochs):
+        for index in range(len(examples) - 1, 0, -1):
+            swap_index = int(random.next() * (index + 1))
+            examples[index], examples[swap_index] = examples[swap_index], examples[index]
+        for inputs, action in examples:
+            targets = array("f", [0]) * network.output_size
+            targets[ACTION_LABELS.index(action)] = 1
+            network.learn(inputs, targets, 0.03)
+        metrics = _action_policy_metrics(network, validation)
+        score = (metrics["accuracy"], -metrics["mse"])
+        if score > best_score:
+            best_score = score
+            best_weights = {key: array("f", getattr(network, key)) for key in ("weights1", "bias1", "weights2", "bias2")}
+    model = create_model()
+    model["randomSeed"] = random.seed
+    model["network"].update(best_weights)
+    model["network"]["policyTrained"] = True
+    model["network"]["trainingMethod"] = "demonstrations-v1"
+    model["network"]["featureSchema"] = "action-state-text-v1"
+    gguf_path = os.path.splitext(os.fsdecode(path))[0] + ".F32.gguf"
+    report = {"validation": _action_policy_metrics(_network_from_model(model), validation)}
+    if test_scenarios is not None:
+        report["test_scenarios"] = evaluate_action_scenarios(model, test_scenarios)
+    _write_model_artifacts(((path, serialize_model(model)), (gguf_path, serialize_gguf_model(model))))
+    return model, report
 
 
 if __name__ == "__main__":

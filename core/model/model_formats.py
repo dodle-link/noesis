@@ -172,6 +172,9 @@ def validate_model(model):
     input_size, hidden_size, output_size = shape
     if "policyTrained" in network and not isinstance(network["policyTrained"], bool):
         raise ValueError("Model network policyTrained must be a boolean.")
+    for key in ("trainingMethod", "featureSchema"):
+        if key in network and (not isinstance(network[key], str) or not network[key] or len(network[key]) > 128):
+            raise ValueError(f"Model network {key} must be a non-empty string of at most 128 characters.")
     expected_lengths = {
         "weights1": input_size * hidden_size,
         "bias1": hidden_size,
@@ -212,6 +215,8 @@ def serialize_model(model):
             "outputSize": network["outputSize"],
         },
         "policyTrained": bool(network.get("policyTrained", False)),
+        "trainingMethod": network.get("trainingMethod", "unspecified"),
+        "featureSchema": network.get("featureSchema", "unspecified"),
     }
     metadata_bytes = json.dumps(metadata, separators=(",", ":"), allow_nan=False).encode("utf-8")
     network_bytes = b"".join(
@@ -245,8 +250,12 @@ def serialize_gguf_model(model):
         ("noesis.input_size", 4, network["inputSize"]),
         ("noesis.hidden_size", 4, network["hiddenSize"]),
         ("noesis.output_size", 4, network["outputSize"]),
-        ("noesis.workspace_version", 4, 1),
+        ("noesis.workspace_version", 4, 2),
         ("noesis.workspace_format", 8, "cycle_snapshot"),
+        ("noesis.policy_trained", 4, int(network.get("policyTrained", False))),
+        ("noesis.training_method", 8, network.get("trainingMethod", "unspecified")),
+        ("noesis.feature_schema", 8, network.get("featureSchema", "unspecified")),
+        ("noesis.tensor_layout", 8, "output-major-f32"),
     )
     metadata_bytes = bytearray()
     for key, value_type, value in metadata:
@@ -331,6 +340,8 @@ def deserialize_model(buffer):
             "weights2": arrays[2],
             "bias2": arrays[3],
             "policyTrained": metadata.get("policyTrained", False),
+            "trainingMethod": metadata.get("trainingMethod", "unspecified"),
+            "featureSchema": metadata.get("featureSchema", "unspecified"),
         },
         "memory": metadata["memory"],
         "rules": metadata["rules"],
