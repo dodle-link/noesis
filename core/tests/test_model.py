@@ -32,6 +32,12 @@ class ModelFileTests(unittest.TestCase):
     def setUpClass(cls):
         cls.model_module = _load_model_module()
 
+    def test_storage_helpers_round_trip_and_reject_invalid_base64(self):
+        encoded = self.model_module.encode_model_for_storage(b"model data")
+        self.assertEqual(self.model_module.decode_model_from_storage(encoded), b"model data")
+        with self.assertRaises(ValueError):
+            self.model_module.decode_model_from_storage("not base64!")
+
     def _biocomputation_provider(self, endpoint="https://bio.example.test/compute", **kwargs):
         kwargs.setdefault("operation_schemas", {"example": {"type": "object"}})
         return self.model_module.BiocomputationProvider(endpoint, **kwargs)
@@ -55,23 +61,25 @@ class ModelFileTests(unittest.TestCase):
         self.assertAlmostEqual(network.weights2[0], 1.8)
         self.assertAlmostEqual(network.weights1[0], 0.6)
 
-    def test_ai_engine_learns_from_pre_action_input_state(self):
+    def test_ai_engine_does_not_update_untrained_network(self):
         engine = self.model_module.AIEngine()
         input_value = {"type": "user_input", "value": "hello"}
-        expected_input = list(engine.encode_input(input_value))
-        learned_inputs = []
-
-        with patch.object(
-            engine.network,
-            "learn",
-            side_effect=lambda inputs, target, learning_rate: learned_inputs.append(
-                list(inputs)
-            ),
-        ):
+        with patch.object(engine.network, "learn") as learn:
             engine.step(input_value)
+        learn.assert_not_called()
 
-        self.assertEqual(learned_inputs[0], expected_input)
-        self.assertNotEqual(learned_inputs[0][0], engine.state["energy"] / 100)
+    def test_step_returns_independent_pre_and_post_action_snapshots(self):
+        engine = self.model_module.AIEngine()
+        input_value = {"type": "user_input", "value": "hello"}
+        first = engine.step(input_value)
+        saved = self.model_module.copy.deepcopy(first)
+        input_value["value"] = "changed"
+        engine.step({"type": "user_input", "value": "again"})
+        self.assertEqual(first, saved)
+        self.assertEqual(first["perception"]["state"]["cycle"], 0)
+        self.assertEqual(first["state"]["cycle"], 1)
+        first["state"]["energy"] = 0
+        self.assertNotEqual(engine.state["energy"], 0)
 
     def test_encode_input_includes_repeatable_text_features(self):
         engine = self.model_module.AIEngine()
@@ -185,6 +193,58 @@ class ModelFileTests(unittest.TestCase):
 
         self.assertEqual(learned["action"]["type"], "learn")
         self.assertEqual(overridden["action"]["type"], "rest")
+
+    def test_scenario_evaluation_compares_multi_step_outcomes_and_overrides(self):
+        model = self.model_module.create_model()
+        network = model["network"]
+        network["outputSize"] = 4
+        network["weights2"] = self.model_module.array("f", [0]) * (network["hiddenSize"] * 4)
+        network["bias2"] = self.model_module.array("f", [0, 0, 2, 0])
+        network["policyTrained"] = True
+        original = self.model_module.serialize_model(model)
+        scenarios = [
+            {
+                "initial_state": {"energy": 80, "curiosity": 50, "confidence": 50},
+                "inputs": [{"type": "user_input", "value": "first"}, {"type": "user_input", "value": "second"}],
+                "objectives": {"confidence": {"min": 60}},
+            },
+            {
+                "initial_state": {"energy": 80, "curiosity": 60, "confidence": 45},
+                "inputs": [None, None],
+                "objectives": {"confidence": {"min": 50}},
+            },
+            {
+                "initial_state": {"energy": 10, "curiosity": 50, "confidence": 50},
+                "inputs": [None, None],
+                "objectives": {"energy": {"min": 15}},
+            },
+        ]
+
+        results = self.model_module.evaluate_action_scenarios(model, scenarios)
+        policy = results["policy"]["scenarios"]
+        baseline = results["rule_baseline"]["scenarios"]
+        self.assertEqual(policy[0]["actions"], ["learn", "learn"])
+        self.assertEqual(baseline[0]["actions"], ["observe", "observe"])
+        self.assertTrue(policy[0]["success"])
+        self.assertFalse(baseline[0]["success"])
+        self.assertEqual(policy[1]["actions"][0], "learn")
+        self.assertEqual(baseline[1]["actions"][0], "learn")
+        self.assertEqual(policy[2]["actions"][0], "rest")
+        self.assertEqual(baseline[2]["actions"][0], "rest")
+        self.assertEqual(policy[2]["minimum_energy"], 10)
+        self.assertEqual(self.model_module.serialize_model(model), original)
+
+    def test_scenario_evaluation_rejects_invalid_scenarios(self):
+        model = self.model_module.create_model()
+        model["network"]["policyTrained"] = True
+        for scenario in (
+            {"inputs": [], "objectives": {"energy": {"min": 20}}},
+            {"inputs": [None], "objectives": {"energy": {"min": 80, "max": 20}}},
+            {"initial_state": {"energy": float("nan")}, "inputs": [None], "objectives": {"energy": {"min": 20}}},
+            {"inputs": [None], "objectives": {"unknown": {"min": 20}}},
+        ):
+            with self.subTest(scenario=scenario), self.assertRaises(ValueError):
+                self.model_module.evaluate_action_scenarios(model, [scenario])
 
     def test_memory_limit_evicts_low_importance_without_reordering_recent_items(self):
         memory = self.model_module.MemoryStore()

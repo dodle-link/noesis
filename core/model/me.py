@@ -96,14 +96,6 @@ class Random:
         return minimum + self.next() * (maximum - minimum)
 
 
-def encode_model_for_storage(buffer):
-    return base64.b64encode(buffer).decode("ascii")
-
-
-def decode_model_from_storage(encoded):
-    return base64.b64decode(encoded, validate=True)
-
-
 def create_initial_self_model():
     return {
         "actions": {},
@@ -1067,7 +1059,7 @@ class AIEngine:
         return vector
 
     def observe(self, input_value):
-        return {"input": input_value, "timestamp": now(), "state": dict(self.state)}
+        return {"input": copy.deepcopy(input_value), "timestamp": now(), "state": copy.deepcopy(self.state)}
 
     def interpret(self, perception, input_vector=None):
         if input_vector is None:
@@ -1162,15 +1154,14 @@ class AIEngine:
         if rule and rule["action"]["type"] != "observe":
             return {"type": rule["action"]["type"], "ruleId": rule["id"]}
         if self.policy_trained and self.network.output_size >= len(ACTION_LABELS):
-            inputs = self.encode_input(perception["input"])
-            outputs = self.network.forward(inputs)["output"]
-            action_index = max(
-                range(len(ACTION_LABELS)), key=lambda index: outputs[index]
-            )
-            return {"type": ACTION_LABELS[action_index], "ruleId": None}
+            return {"type": self._policy_action(perception), "ruleId": None}
         if rule:
             return {"type": rule["action"]["type"], "ruleId": rule["id"]}
         return {"type": self.behavior.run(self.state), "ruleId": None}
+
+    def _policy_action(self, perception):
+        outputs = self.network.forward(self.encode_input(perception["input"]))["output"]
+        return ACTION_LABELS[max(range(len(ACTION_LABELS)), key=lambda index: outputs[index])]
 
     def predict_action(self, action):
         action_model = self.state["selfModel"]["actions"].get(action["type"], {})
@@ -1229,11 +1220,6 @@ class AIEngine:
         return {"reward": reward, "perception": perception, "action": action, "result": result}
 
     def learn(self, evaluation, input_vector=None):
-        if input_vector is None:
-            input_vector = self.encode_input(evaluation["perception"]["input"])
-        if not self.policy_trained:
-            target = array("f", [evaluation["reward"]]) * self.network.output_size
-            self.network.learn(input_vector, target, CONFIG["LEARNING_RATE"])
         action = evaluation["action"]
         if action["ruleId"]:
             self.rules.reward(action["ruleId"], evaluation["reward"])
@@ -1290,7 +1276,7 @@ class AIEngine:
         self.learn(evaluation, input_vector)
         self.update_state(evaluation)
         self.sync_model()
-        return {
+        return copy.deepcopy({
             "perception": perception,
             "interpretation": interpretation,
             "action": action,
@@ -1299,7 +1285,7 @@ class AIEngine:
             "result": result,
             "evaluation": evaluation,
             "state": self.state,
-        }
+        })
 
     def respond(self, input_value, provider=None):
         """Generate a provider reply, then run one local engine step."""
@@ -1363,6 +1349,82 @@ class AIEngine:
 
     def get_behavior(self):
         return self.behavior.program
+
+
+def evaluate_action_scenarios(model, scenarios):
+    """Compare a trained policy and the threshold baseline on caller-supplied tasks."""
+    if not isinstance(model, dict):
+        model = load_model_file(model)
+    validate_model(model)
+    if not model["network"].get("policyTrained") or model["network"]["outputSize"] < len(ACTION_LABELS):
+        raise ValueError("A trained action policy is required.")
+    if not isinstance(scenarios, list) or not scenarios:
+        raise ValueError("scenarios must be a non-empty list.")
+
+    class BaselineEngine(AIEngine):
+        def _policy_action(self, perception):
+            return _action_policy_target(
+                self.state["energy"], self.state["curiosity"], self.state["confidence"]
+            )
+
+    state_keys = ("energy", "curiosity", "confidence", "stability")
+    runs = {"policy": [], "rule_baseline": []}
+    for scenario in scenarios:
+        if not isinstance(scenario, dict):
+            raise ValueError("Each scenario must be an object.")
+        initial = scenario.get("initial_state", {})
+        inputs = scenario.get("inputs")
+        objectives = scenario.get("objectives")
+        if not isinstance(initial, dict) or any(key not in state_keys for key in initial):
+            raise ValueError("initial_state must contain only supported state values.")
+        if not isinstance(inputs, list) or not inputs:
+            raise ValueError("Each scenario must contain a non-empty inputs list.")
+        if not isinstance(objectives, dict) or not objectives:
+            raise ValueError("Each scenario must contain objectives.")
+        for key, value in initial.items():
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 100:
+                raise ValueError(f"Invalid initial state value for {key}.")
+        for key, bounds in objectives.items():
+            if key not in state_keys or not isinstance(bounds, dict) or not bounds or any(bound not in ("min", "max") for bound in bounds):
+                raise ValueError("Objectives must specify min or max for supported state values.")
+            for value in bounds.values():
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 100:
+                    raise ValueError("Objective bounds must be finite values between 0 and 100.")
+            if "min" in bounds and "max" in bounds and bounds["min"] > bounds["max"]:
+                raise ValueError("Objective min cannot exceed max.")
+
+        for label, engine_type in (("policy", AIEngine), ("rule_baseline", BaselineEngine)):
+            engine = engine_type(copy.deepcopy(model))
+            engine.state.update(initial)
+            actions = []
+            total_reward = 0.0
+            minimum_energy = engine.state["energy"]
+            for input_value in inputs:
+                result = engine.step(copy.deepcopy(input_value))
+                actions.append(result["action"]["type"])
+                total_reward += result["evaluation"]["reward"]
+                minimum_energy = min(minimum_energy, result["state"]["energy"])
+            final_state = {key: engine.state[key] for key in state_keys}
+            succeeded = all(
+                ("min" not in bounds or final_state[key] >= bounds["min"])
+                and ("max" not in bounds or final_state[key] <= bounds["max"])
+                for key, bounds in objectives.items()
+            )
+            runs[label].append({
+                "actions": actions,
+                "total_reward": total_reward,
+                "minimum_energy": minimum_energy,
+                "final_state": final_state,
+                "success": succeeded,
+            })
+    return {
+        label: {
+            "success_rate": sum(run["success"] for run in results) / len(results),
+            "mean_total_reward": sum(run["total_reward"] for run in results) / len(results),
+            "scenarios": results,
+        }
+        for label, results in runs.items()
+    }
 
 
 if __name__ == "__main__":

@@ -38,11 +38,11 @@ result = engine.step({"type": "user_input", "value": "hello"})
 print(result["action"])
 ```
 
-The engine updates its state as it runs. Save the latest state with `engine.export_model()` when you want to keep those updates.
+The engine updates its state as it runs. Each `step()` result is an independent snapshot. Save the latest state with `engine.export_model()` when you want to keep those updates.
 
 ## How it works
 
-Each step reads the input and current state, chooses an action, runs it, and updates the model. Rules and eligible goals can take priority. A model trained with `--train-actions` can use its network to choose among `rest`, `explore`, `learn`, and `observe`. Untrained models keep their existing rules and behavior.
+Each step reads the input and current state, chooses an action, runs it, and updates the model. Rules and eligible goals can take priority. A model trained with `--train-actions` can use its network to choose among `rest`, `explore`, `learn`, and `observe`. Untrained models keep their existing rules and behavior. Steps update memory, rules, and the outcome self-model, but do not train network weights online.
 
 The engine also records a workspace snapshot: what it focused on, which goal was active, what it expected, and what happened. This is a software trace, not evidence of subjective experience. Values such as `novelty`, `stress`, `recovery`, and `arousal` are bounded software signals. They are not biological measurements, and the model does not simulate quantum effects or establish consciousness.
 
@@ -59,6 +59,24 @@ python3 me.py --train-actions --seed 123
 The command writes `noe-action-model.dodl` and a GGUF companion. It trains on a generated policy and selects checkpoints using 100 fixed validation scenarios. Evaluation also reports results on a separate 100-scenario held-out set, including accuracy and support for each action; held-out results do not affect checkpoint selection. Use `--samples`, `--epochs`, and `--patience` to adjust training, `--output` to choose a file path, and `--seed` to make a run repeatable. The engine uses the trained policy unless a rule or eligible goal takes priority.
 
 Evaluation reports both a majority-class baseline and `rule_baseline_accuracy`. The generated labels are defined by the same threshold policy used by the rule baseline, so a perfect rule-baseline score is expected; compare against real task scenarios before preferring the neural policy.
+
+Use `evaluate_action_scenarios` to compare a trained model against that threshold baseline on multi-step tasks. Both run through the same engine, including rule and goal overrides. Supply representative task inputs, starting state values, and measurable final-state objectives. For example, this is a synthetic illustration, not evidence of real-world performance:
+
+```python
+from me import evaluate_action_scenarios, load_model_file
+
+model = load_model_file("noe-action-model.dodl")
+scenarios = [{
+    "initial_state": {"energy": 80, "curiosity": 50, "confidence": 50},
+    "inputs": [{"type": "user_input", "value": "first"},
+               {"type": "user_input", "value": "second"}],
+    "objectives": {"confidence": {"min": 55}, "energy": {"min": 20}},
+}]
+results = evaluate_action_scenarios(model, scenarios)
+print(results["policy"]["success_rate"], results["rule_baseline"]["success_rate"])
+```
+
+Objectives support `min` and `max` bounds on final `energy`, `curiosity`, `confidence`, and `stability`. Results include success rates, mean total reward, and each scenario's actions, minimum energy, final state, and success. The evaluator copies the model for each run. Its reward and state objectives measure this simulation only; representative tasks and independent outcome criteria are still needed to assess usefulness.
 
 ### Pixel controller
 
@@ -197,6 +215,7 @@ You can pass DODL models or supported model paths. ONNX loading requires `pip in
 - `serialize_gguf_model(model)` and `create_gguf_model_file(path, model)` write GGUF data.
 - `AIEngine(model=None)` runs a model. `step(input_value)` performs one cycle, and `export_model()` returns the updated model as bytes.
 - `train_action_model(...)` trains an action policy; `evaluate_action_model(model)` reports validation and held-out results, including per-action accuracy and support.
+- `evaluate_action_scenarios(model, scenarios)` compares multi-step task outcomes against the threshold rule baseline.
 - `merge_models(model_a, model_b, alpha=0.5)` blends network weights.
 - `LLMProvider(...)` configures a text-generation service; `AIEngine.respond(...)` requests a reply and runs one local cycle.
 - `BiocomputationProvider(...)` configures an allowlisted gateway client; `AIEngine.compute_biological(...)` submits an approved task without changing model state. `submit_task()`, `get_job()`, and `cancel_job()` provide asynchronous job handling.
