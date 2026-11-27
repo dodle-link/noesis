@@ -38,6 +38,31 @@ class ModelFileTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.model_module.decode_model_from_storage("not base64!")
 
+    def test_memory_recall_normalizes_case_and_punctuation(self):
+        memory = self.model_module.MemoryStore()
+        memory.add({"input": {"value": "Hello, WORLD!"}, "action": "observe"})
+        matches = memory.recall({"value": "hello world"})
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["relevance"], 1.0)
+
+    def test_safety_rules_precede_and_are_not_adapted(self):
+        model = self.model_module.create_model()
+        safety = model["rules"][0]
+        competing = model["rules"][1]
+        competing["condition"] = {"type": "always"}
+        competing["priority"] = 1000
+        engine = self.model_module.AIEngine(model)
+        engine.state["energy"] = 10
+        self.assertEqual(engine.step(None)["action"]["type"], "rest")
+        for _ in range(20):
+            engine.rules.reward(safety["id"], -1)
+        engine.rules.evolve()
+        self.assertEqual((safety["priority"], safety["success"], safety["failure"]), (100, 0, 0))
+        self.assertTrue(safety["enabled"])
+        safety["enabled"] = False
+        with self.assertRaisesRegex(ValueError, "invalid rule"):
+            self.model_module.validate_model(model)
+
     def test_gguf_tensor_layout_reproduces_network_output(self):
         model = self.model_module.create_model()
         data = self.model_module.serialize_gguf_model(model)
@@ -134,6 +159,39 @@ class ModelFileTests(unittest.TestCase):
         self.assertNotEqual(first_vector, second_vector)
         self.assertEqual(first_vector, list(engine.encode_input(first)))
         self.assertTrue(all(-1 <= value <= 1 for value in first_vector[7:]))
+
+    def test_contextual_features_include_active_goal_and_recalled_actions(self):
+        model = self.model_module.create_model()
+        model["network"]["featureSchema"] = "action-context-v2"
+        engine = self.model_module.AIEngine(model)
+        engine.state["confidence"] = 30
+        engine.memory.add({"input": {"value": "Study, this!"}, "action": "learn"})
+        vector = engine.encode_input({"type": "user_input", "value": "study this"})
+        self.assertAlmostEqual(vector[11], 0.2)
+        self.assertEqual(vector[14], 1.0)
+        self.assertEqual(vector[12], 0.0)
+
+    def test_contextual_step_uses_supplied_workspace_for_interpretation_and_policy(self):
+        model = self.model_module.create_model()
+        model["network"]["featureSchema"] = "action-context-v2"
+        model["network"]["policyTrained"] = True
+        engine = self.model_module.AIEngine(model)
+        workspace = engine.open_workspace(engine.observe(None), persist=False)
+        workspace["memories"] = [{"episode": {"action": "learn"}, "relevance": 1.0}]
+        with patch.object(engine.network, "forward", wraps=engine.network.forward) as forward:
+            result = engine.step(None, workspace=workspace)
+        self.assertEqual(result["workspace"]["decisionSource"], "policy")
+        self.assertEqual(forward.call_args_list[0].args[0][14], 1.0)
+        self.assertEqual(forward.call_args_list[1].args[0][14], 1.0)
+
+    def test_merge_rejects_different_trained_feature_schemas(self):
+        first = self.model_module.create_model()
+        second = self.model_module.create_model()
+        first["network"]["policyTrained"] = True
+        second["network"]["policyTrained"] = True
+        second["network"]["featureSchema"] = "action-context-v2"
+        with self.assertRaisesRegex(ValueError, "matching feature schemas"):
+            self.model_module.merge_models(first, second)
 
     def test_action_model_training_is_repeatable_and_beats_observe_baseline(self):
         with tempfile.TemporaryDirectory(prefix="action-model-tests-") as directory:
@@ -237,8 +295,9 @@ class ModelFileTests(unittest.TestCase):
             with open(os.path.join(directory, "demonstrations.F32.gguf"), "rb") as model_file:
                 gguf = model_file.read()
             self.assertEqual(restored["network"]["trainingMethod"], "demonstrations-v1")
-            self.assertEqual(restored["network"]["featureSchema"], "action-state-text-v1")
+            self.assertEqual(restored["network"]["featureSchema"], "action-context-v2")
             self.assertIn(b"demonstrations-v1", gguf)
+            self.assertIn(b"action-context-v2", gguf)
             self.assertTrue(model["network"]["policyTrained"])
             self.assertEqual(set(report["test_scenarios"]), {"prediction", "policy", "rule_baseline"})
             self.assertIn("mean_prediction_error", report["test_scenarios"]["prediction"])
@@ -313,7 +372,37 @@ class ModelFileTests(unittest.TestCase):
         self.assertEqual(policy[2]["actions"][0], "rest")
         self.assertEqual(baseline[2]["actions"][0], "rest")
         self.assertEqual(policy[2]["minimum_energy"], 10)
+        self.assertEqual(policy[2]["decision_sources"][0], "safety_rule")
+        self.assertGreater(results["policy"]["override_rate"], 0)
+        self.assertGreater(results["policy"]["decision_source_counts"]["policy"], 0)
         self.assertEqual(self.model_module.serialize_model(model), original)
+
+    def test_scenario_expected_actions_are_scored_independently(self):
+        model = self.model_module.create_model()
+        model["network"]["policyTrained"] = True
+        scenario = {"initial_state": {"energy": 10}, "inputs": [None, None],
+                    "objectives": {"energy": {"min": 10}}, "expected_actions": ["rest", None]}
+        results = self.model_module.evaluate_action_scenarios(model, [scenario])
+        self.assertEqual(results["policy"]["action_accuracy"], 1.0)
+        self.assertEqual(results["policy"]["scenarios"][0]["labeled_actions"], 1)
+        scenario["expected_actions"] = ["rest"]
+        with self.assertRaisesRegex(ValueError, "expected_actions"):
+            self.model_module.evaluate_action_scenarios(model, [scenario])
+
+    def test_demonstration_groups_cannot_overlap(self):
+        episode = {"group": "source-a", "initial_state": {"energy": 80},
+                   "inputs": [None], "actions": ["learn"],
+                   "objectives": {"energy": {"min": 20}}}
+        validation = self.model_module.copy.deepcopy(episode)
+        validation["initial_state"]["energy"] = 75
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "model.dodl")
+            with self.assertRaisesRegex(ValueError, "groups must be distinct"):
+                self.model_module.train_action_model_from_episodes(path, [episode], [validation])
+            validation["group"] = "source-b"
+            test = {"group": "source-a", "inputs": [None], "objectives": {"energy": {"min": 0}}}
+            with self.assertRaisesRegex(ValueError, "groups must be distinct"):
+                self.model_module.train_action_model_from_episodes(path, [episode], [validation], test_scenarios=[test])
 
     def test_scenario_evaluation_rejects_invalid_scenarios(self):
         model = self.model_module.create_model()

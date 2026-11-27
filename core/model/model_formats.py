@@ -93,6 +93,8 @@ def validate_model(model):
             or not isinstance(action.get("type"), str)
             or not action["type"]
             or not isinstance(rule.get("enabled"), bool)
+            or not isinstance(rule.get("safety", False), bool)
+            or (rule.get("safety", False) and not rule["enabled"])
             or not _finite_number(rule.get("priority"))
             or any(
                 not isinstance(rule.get(key), int)
@@ -175,6 +177,8 @@ def validate_model(model):
     for key in ("trainingMethod", "featureSchema"):
         if key in network and (not isinstance(network[key], str) or not network[key] or len(network[key]) > 128):
             raise ValueError(f"Model network {key} must be a non-empty string of at most 128 characters.")
+    if network.get("featureSchema") == "action-context-v2" and input_size != 16:
+        raise ValueError("The action-context-v2 feature schema requires 16 inputs.")
     expected_lengths = {
         "weights1": input_size * hidden_size,
         "bias1": hidden_size,

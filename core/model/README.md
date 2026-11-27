@@ -54,7 +54,7 @@ This writes `noe-model.dodl` and `noe-model.F32.gguf` in the current directory, 
 
 Each step reads the input and current state, chooses an action, runs it, and updates the model. Rules and eligible goals can take priority. A model trained with `--train-actions` can use its network to choose among `rest`, `explore`, `learn`, and `observe`. An untrained model uses its existing rules and behavior instead. Steps update memory, rules, and the outcome self-model, but do not train network weights online.
 
-The engine records a workspace snapshot for each step. This includes the input, active goal, recalled episodes, candidate predictions, expected outcome, and actual outcome. Episodes are selected by word overlap and recency, not semantic understanding.
+The engine records a workspace snapshot for each step. This includes the input, active goal, recalled episodes, candidate predictions, expected outcome, actual outcome, and `decisionSource`. Episodes are selected by case- and punctuation-normalized word overlap and recency, not semantic understanding.
 
 When a goal is unmet, previously observed action effects can help guide the choice. Explicit non-`observe` rules still take priority, and unknown actions fall back to the existing policy. Uncertainty values are simple heuristics based on observation counts and word overlap, not calibrated probabilities. Reply providers receive the recalled episodes and pre-action workspace; their analysis does not control actions.
 
@@ -86,14 +86,18 @@ scenarios = [{
     "initial_state": {"energy": 80, "curiosity": 50, "confidence": 50},
     "inputs": [{"type": "user_input", "value": "first"},
                {"type": "user_input", "value": "second"}],
+    "expected_actions": ["learn", "learn"],
     "objectives": {"confidence": {"min": 55}, "energy": {"min": 20}},
 }]
 results = evaluate_action_scenarios(model, scenarios)
 print(results["prediction"]["success_rate"], results["policy"]["success_rate"],
     results["rule_baseline"]["success_rate"])
+print(results["policy"]["action_accuracy"], results["policy"]["decision_source_counts"])
 ```
 
-Objectives support `min` and `max` bounds on final `energy`, `curiosity`, `confidence`, and `stability`. Results include success rates, mean total reward, mean prediction error, and each scenario's actions, minimum energy, final state, and success. The evaluator copies the model for each run. Its reward and state objectives measure this simulation only; representative tasks and independent outcome criteria are still needed to assess usefulness.
+Objectives support `min` and `max` bounds on final `energy`, `curiosity`, `confidence`, and `stability`. Results include success rates, mean total reward, mean prediction error, and each scenario's actions, decision sources, minimum energy, final state, and success. `decision_source_counts` and `override_rate` show how often a rule, goal, or prediction selected an action instead of the policy. For independently labeled decisions, add `expected_actions` to a scenario: one action name or `None` per input. `action_accuracy` is the fraction of labeled actions matched, or `None` when no labels were supplied. Labels should be chosen independently of the model and its training data.
+
+The evaluator copies the model for each run. Its state objectives, rewards, and action labels measure this simulation only; they do not measure actual user outcomes. Build held-out scenarios from intended use cases, with independently defined success criteria and task or source groups. The engine's four actions do not themselves perform external tasks, so an end-to-end usefulness benchmark also needs evaluation of the surrounding application and its real outcomes.
 
 ### Train from task demonstrations
 
@@ -102,17 +106,18 @@ Objectives support `min` and `max` bounds on final `energy`, `curiosity`, `confi
 ```python
 from me import train_action_model_from_episodes
 
-def episode(energy, text):
+def episode(energy, text, group):
     return {
+        "group": group,
         "initial_state": {"energy": energy, "confidence": 50},
         "inputs": [{"type": "user_input", "value": text}, None],
         "actions": ["learn", "learn"],
         "objectives": {"confidence": {"min": 60}, "energy": {"min": 20}},
     }
 
-training = [episode(80, "training task")]
-validation = [episode(75, "validation task")]
-test = episode(70, "held out task")
+training = [episode(80, "training task", "training-source")]
+validation = [episode(75, "validation task", "validation-source")]
+test = episode(70, "held out task", "test-source")
 del test["actions"]
 model, report = train_action_model_from_episodes(
     "noe-demonstration-model.dodl", training, validation,
@@ -122,7 +127,13 @@ print(report["validation"]["accuracy"])
 print(report["test_scenarios"]["prediction"]["success_rate"])
 ```
 
-This example is intentionally small and synthetic; it does not establish generalization. Supply larger, representative demonstrations and independently designed validation and held-out tasks, including conflicting goals. The trainer rejects exact duplicate scenarios across the sets, but cannot detect subtler data leakage. The network still sees only its encoded state and input, not a full workspace; the runtime handles workspace-based planning separately.
+This example is intentionally small and synthetic; it does not establish generalization. Supply larger, representative demonstrations and independently designed validation and held-out tasks, including conflicting goals. To prevent source or task leakage, add a non-empty `group` string to every training episode, validation episode, and test scenario. Groups may repeat within a split but must be disjoint across splits. Grouping is optional for compatibility; the caller must select meaningful group identities. The trainer also rejects exact duplicate scenarios across the sets, but cannot detect subtler leakage.
+
+Demonstration policies use the `action-context-v2` feature schema: state, compact text features, the active goal's state deficits, and relevance scores for recalled actions. Existing `action-state-text-v1` models retain their original encoding. Neither schema represents the full workspace; the runtime handles workspace-based planning separately.
+
+### Safety rules
+
+New models mark the low-energy rest rule with `"safety": true`. Enabled safety rules take precedence over adaptive rules regardless of priority, and reward updates and rule evolution do not change or disable them. Older models retain their existing rules; mark a rule explicitly to opt in. A safety rule must be enabled. These rules are application-level safeguards, not a security boundary: trusted code must control model files and any external operations independently.
 
 ### Pixel controller
 

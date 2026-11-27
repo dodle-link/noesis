@@ -8,6 +8,7 @@ import copy
 import json
 import math
 import os
+import re
 import secrets
 import struct
 import tempfile
@@ -163,6 +164,7 @@ def create_initial_rules():
             "action": {"type": "rest"},
             "priority": 100,
             "enabled": True,
+            "safety": True,
             "success": 0,
             "failure": 0,
         },
@@ -652,7 +654,7 @@ class MemoryStore:
 
     def recall(self, input_value, count=3):
         text = input_value.get("value") if isinstance(input_value, dict) else None
-        tokens = set(text.lower().split()) if isinstance(text, str) else set()
+        tokens = set(re.findall(r"\w+", text.casefold())) if isinstance(text, str) else set()
         if not tokens:
             return []
         matches = []
@@ -661,7 +663,7 @@ class MemoryStore:
             stored_text = stored_input.get("value") if isinstance(stored_input, dict) else None
             if not isinstance(stored_text, str):
                 continue
-            stored_tokens = set(stored_text.lower().split())
+            stored_tokens = set(re.findall(r"\w+", stored_text.casefold()))
             overlap = len(tokens & stored_tokens)
             if not overlap:
                 continue
@@ -715,7 +717,7 @@ class RuleEngine:
             for rule in self.rules
             if rule.get("enabled") and self.evaluate_condition(rule.get("condition"), state)
         ]
-        return sorted(applicable, key=lambda rule: rule["priority"], reverse=True)
+        return sorted(applicable, key=lambda rule: (rule.get("safety", False), rule["priority"]), reverse=True)
 
     def select(self, state):
         applicable = self.get_applicable(state)
@@ -723,7 +725,7 @@ class RuleEngine:
 
     def reward(self, rule_id, reward):
         rule = next((item for item in self.rules if item.get("id") == rule_id), None)
-        if rule:
+        if rule and not rule.get("safety", False):
             if reward > 0:
                 rule["success"] += 1
                 rule["priority"] += 1
@@ -734,11 +736,13 @@ class RuleEngine:
 
     def evolve(self):
         for rule in self.rules:
+            if rule.get("safety", False):
+                continue
             total = rule["success"] + rule["failure"]
             if total >= 10 and rule["success"] / total < 0.1:
                 rule["enabled"] = False
         if len(self.rules) > CONFIG["RULE_LIMIT"]:
-            self.rules = sorted(self.rules, key=lambda rule: rule["priority"], reverse=True)[
+            self.rules = sorted(self.rules, key=lambda rule: (rule.get("safety", False), rule["priority"]), reverse=True)[
                 : CONFIG["RULE_LIMIT"]
             ]
 
@@ -935,6 +939,9 @@ def merge_models(model_a, model_b, alpha=0.5):
 
     network_a = model_a["network"]
     network_b = model_b["network"]
+    if (network_a.get("policyTrained") and network_b.get("policyTrained")
+            and network_a.get("featureSchema", "unspecified") != network_b.get("featureSchema", "unspecified")):
+        raise ValueError("Trained policies must have matching feature schemas to merge.")
     shape_keys = ("inputSize", "hiddenSize", "outputSize")
     shape_a = tuple(network_a[key] for key in shape_keys)
     shape_b = tuple(network_b[key] for key in shape_keys)
@@ -1066,8 +1073,11 @@ class AIEngine:
         self.workspace = self.state.setdefault("workspace", create_initial_workspace())
         self.goals = self.model["goals"]
 
-    def encode_input(self, input_value):
+    def encode_input(self, input_value, workspace=None):
         vector = array("f", [0]) * self.network.input_size
+        contextual = self.model["network"].get("featureSchema") == "action-context-v2"
+        if contextual and workspace is None:
+            workspace = self.open_workspace(self.observe(input_value), persist=False)
         state_features = (
             self.state["energy"] / 100,
             self.state["curiosity"] / 100,
@@ -1081,7 +1091,8 @@ class AIEngine:
             if isinstance(value, str) and len(vector) > 4:
                 vector[4] = min(len(value) / 100, 1)
                 feature_start = 7
-                feature_count = len(vector) - feature_start
+                feature_end = 9 if contextual else len(vector)
+                feature_count = feature_end - feature_start
                 if feature_count > 0:
                     for token in value.lower().split():
                         token_hash = 2166136261
@@ -1090,15 +1101,26 @@ class AIEngine:
                         bucket = token_hash % feature_count
                         sign = 1 if token_hash & 0x80000000 else -1
                         vector[feature_start + bucket] += sign
-                    feature_values = vector[feature_start:]
+                    feature_values = vector[feature_start:feature_end]
                     magnitude = max((abs(value) for value in feature_values), default=0)
                     if magnitude > 1:
-                        for index in range(feature_start, len(vector)):
+                        for index in range(feature_start, feature_end):
                             vector[index] /= magnitude
             if input_value.get("type") == "user_input" and len(vector) > 5:
                 vector[5] = 1
         if len(vector) > 6:
             vector[6] = min(len(self.memory.items) / CONFIG["MEMORY_LIMIT"], 1)
+        if contextual:
+            goal = next((goal for goal in self.goals if goal.get("id") == workspace.get("goal")), None)
+            if goal:
+                for index, key in enumerate(("energy", "curiosity", "confidence"), 9):
+                    target = goal.get("target", {}).get(key + "Min", goal.get("target", {}).get(key, self.state[key]))
+                    vector[index] = clamp((target - self.state[key]) / 100, 0, 1)
+            for match in workspace.get("memories", []):
+                action = match["episode"].get("action")
+                if action in ACTION_LABELS:
+                    index = 12 + ACTION_LABELS.index(action)
+                    vector[index] = max(vector[index], match["relevance"])
         return vector
 
     def observe(self, input_value):
@@ -1190,24 +1212,31 @@ class AIEngine:
         return workspace
 
     def decide(self, perception, workspace=None):
+        def selected(action_type, rule_id, source):
+            if workspace is not None:
+                workspace["decisionSource"] = source
+            return {"type": action_type, "ruleId": rule_id}
+
         rule = self.rules.select(self.state)
+        if rule and rule.get("safety", False):
+            return selected(rule["action"]["type"], rule["id"], "safety_rule")
         default_action = rule is None or rule["action"]["type"] == "observe"
         signals = self.state["bioSignals"]
         if workspace and default_action and signals["stress"] < 0.75 and signals["recovery"] > 0.1:
             predicted_action = self.select_predicted_action(workspace)
             if predicted_action is not None:
-                return {"type": predicted_action, "ruleId": None}
+                return selected(predicted_action, None, "prediction")
             if workspace.get("goal") == "learn":
-                return {"type": "learn", "ruleId": None}
+                return selected("learn", None, "goal")
             if workspace.get("goal") == "explore" and signals["novelty"] >= 0.7:
-                return {"type": "explore", "ruleId": None}
+                return selected("explore", None, "goal")
         if rule and rule["action"]["type"] != "observe":
-            return {"type": rule["action"]["type"], "ruleId": rule["id"]}
+            return selected(rule["action"]["type"], rule["id"], "rule")
         if self.policy_trained and self.network.output_size >= len(ACTION_LABELS):
-            return {"type": self._policy_action(perception), "ruleId": None}
+            return selected(self._policy_action(perception), None, "policy")
         if rule:
-            return {"type": rule["action"]["type"], "ruleId": rule["id"]}
-        return {"type": self.behavior.run(self.state), "ruleId": None}
+            return selected(rule["action"]["type"], rule["id"], "rule")
+        return selected(self.behavior.run(self.state), None, "behavior")
 
     def select_predicted_action(self, workspace=None):
         best_action = None
@@ -1244,7 +1273,7 @@ class AIEngine:
         return best_action
 
     def _policy_action(self, perception):
-        outputs = self.network.forward(self.encode_input(perception["input"]))["output"]
+        outputs = self.network.forward(self.encode_input(perception["input"], self.workspace))["output"]
         return ACTION_LABELS[max(range(len(ACTION_LABELS)), key=lambda index: outputs[index])]
 
     def predict_action(self, action, workspace=None):
@@ -1358,14 +1387,14 @@ class AIEngine:
     def step(self, input_value, provider_analysis=None, workspace=None):
         perception = self.observe(input_value)
         self.sense_bio_signals(input_value)
-        input_vector = self.encode_input(perception["input"])
-        interpretation = self.interpret(perception, input_vector)
         if workspace is None:
             workspace = self.open_workspace(perception)
         else:
             workspace = copy.deepcopy(workspace)
             self.workspace = workspace
             self.state["workspace"] = workspace
+        input_vector = self.encode_input(perception["input"], workspace)
+        interpretation = self.interpret(perception, input_vector)
         workspace["providerAnalysis"] = copy.deepcopy(provider_analysis)
         workspace["internalState"]["bioSignals"] = copy.deepcopy(self.state["bioSignals"])
         action = self.decide(perception, workspace)
@@ -1385,6 +1414,7 @@ class AIEngine:
             "providerAnalysis": workspace["providerAnalysis"],
             "goal": workspace["goal"],
             "intention": workspace["intention"],
+            "decisionSource": workspace.get("decisionSource"),
             "prediction": workspace["prediction"],
             "outcome": workspace["outcome"],
             "predictionError": workspace["predictionError"],
@@ -1500,10 +1530,16 @@ def evaluate_action_scenarios(model, scenarios):
         initial = scenario.get("initial_state", {})
         inputs = scenario.get("inputs")
         objectives = scenario.get("objectives")
+        expected_actions = scenario.get("expected_actions")
         if not isinstance(initial, dict) or any(key not in state_keys for key in initial):
             raise ValueError("initial_state must contain only supported state values.")
         if not isinstance(inputs, list) or not inputs:
             raise ValueError("Each scenario must contain a non-empty inputs list.")
+        if expected_actions is not None and (
+            not isinstance(expected_actions, list) or len(expected_actions) != len(inputs)
+            or any(action is not None and action not in ACTION_LABELS for action in expected_actions)
+        ):
+            raise ValueError("expected_actions must contain an action or null for each input.")
         if not isinstance(objectives, dict) or not objectives:
             raise ValueError("Each scenario must contain objectives.")
         for key, value in initial.items():
@@ -1526,12 +1562,14 @@ def evaluate_action_scenarios(model, scenarios):
             engine = engine_type(copy.deepcopy(scenario_model))
             engine.state.update(initial)
             actions = []
+            sources = []
             total_reward = 0.0
             prediction_error = 0.0
             minimum_energy = engine.state["energy"]
             for input_value in inputs:
                 result = engine.step(copy.deepcopy(input_value))
                 actions.append(result["action"]["type"])
+                sources.append(result["workspace"].get("decisionSource", "unknown"))
                 total_reward += result["evaluation"]["reward"]
                 prediction_error += result["prediction"]["absoluteError"]
                 minimum_energy = min(minimum_energy, result["state"]["energy"])
@@ -1543,6 +1581,9 @@ def evaluate_action_scenarios(model, scenarios):
             )
             runs[label].append({
                 "actions": actions,
+                "decision_sources": sources,
+                "labeled_actions": sum(action is not None for action in expected_actions) if expected_actions is not None else 0,
+                "correct_actions": sum(expected is not None and actual == expected for actual, expected in zip(actions, expected_actions)) if expected_actions is not None else 0,
                 "total_reward": total_reward,
                 "mean_prediction_error": prediction_error / len(inputs),
                 "minimum_energy": minimum_energy,
@@ -1554,6 +1595,12 @@ def evaluate_action_scenarios(model, scenarios):
             "success_rate": sum(run["success"] for run in results) / len(results),
             "mean_total_reward": sum(run["total_reward"] for run in results) / len(results),
             "mean_prediction_error": sum(run["mean_prediction_error"] for run in results) / len(results),
+            "decision_source_counts": {
+                source: sum(run["decision_sources"].count(source) for run in results)
+                for source in ("safety_rule", "rule", "goal", "prediction", "policy", "behavior", "unknown")
+            },
+            "override_rate": sum(source in ("safety_rule", "rule", "goal", "prediction") for run in results for source in run["decision_sources"]) / sum(len(run["decision_sources"]) for run in results),
+            "action_accuracy": (sum(run["correct_actions"] for run in results) / sum(run["labeled_actions"] for run in results)) if any(run["labeled_actions"] for run in results) else None,
             "scenarios": results,
         }
         for label, results in runs.items()
@@ -1570,6 +1617,15 @@ def train_action_model_from_episodes(path, training_episodes, validation_episode
         raise ValueError("Training and validation episodes must be non-empty lists.")
     if any(not isinstance(episode, dict) for episode in training_episodes + validation_episodes):
         raise ValueError("Each episode must be an object.")
+    if test_scenarios is not None and (not isinstance(test_scenarios, list) or not test_scenarios or any(not isinstance(item, dict) for item in test_scenarios)):
+        raise ValueError("test_scenarios must be a non-empty list of objects.")
+    splits = [training_episodes, validation_episodes] + ([test_scenarios] if test_scenarios is not None else [])
+    if any("group" in episode for split in splits for episode in split):
+        if any(not isinstance(episode.get("group"), str) or not episode["group"].strip() for split in splits for episode in split):
+            raise ValueError("Every episode and test scenario must have a non-empty group when grouping is used.")
+        groups = [set(episode["group"] for episode in split) for split in splits]
+        if any(groups[first] & groups[second] for first in range(len(groups)) for second in range(first + 1, len(groups))):
+            raise ValueError("Training, validation, and test groups must be distinct.")
     try:
         training_ids = {json.dumps(episode, sort_keys=True, allow_nan=False) for episode in training_episodes}
         validation_ids = {json.dumps(episode, sort_keys=True, allow_nan=False) for episode in validation_episodes}
@@ -1599,7 +1655,7 @@ def train_action_model_from_episodes(path, training_episodes, validation_episode
     class DemonstrationEngine(AIEngine):
         def decide(self, perception, workspace=None):
             rule = self.rules.select(self.state)
-            if rule and rule["action"]["type"] != "observe":
+            if rule and (rule.get("safety", False) or rule["action"]["type"] != "observe"):
                 if rule["action"]["type"] != self.demonstrated_action:
                     raise ValueError("A demonstrated action conflicts with a rule override.")
                 return {"type": self.demonstrated_action, "ruleId": rule["id"]}
@@ -1607,6 +1663,7 @@ def train_action_model_from_episodes(path, training_episodes, validation_episode
 
     template = create_model()
     template["network"]["policyTrained"] = True
+    template["network"]["featureSchema"] = "action-context-v2"
 
     def collect(episodes):
         examples = []
@@ -1659,7 +1716,7 @@ def train_action_model_from_episodes(path, training_episodes, validation_episode
     model["network"].update(best_weights)
     model["network"]["policyTrained"] = True
     model["network"]["trainingMethod"] = "demonstrations-v1"
-    model["network"]["featureSchema"] = "action-state-text-v1"
+    model["network"]["featureSchema"] = "action-context-v2"
     gguf_path = os.path.splitext(os.fsdecode(path))[0] + ".F32.gguf"
     report = {"validation": _action_policy_metrics(_network_from_model(model), validation)}
     if test_scenarios is not None:
