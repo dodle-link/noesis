@@ -119,6 +119,7 @@ def create_initial_workspace():
         "focus": "idle",
         "externalInput": None,
         "internalState": {},
+        "presentSelf": None,
         "providerAnalysis": None,
         "goal": None,
         "intention": None,
@@ -1453,6 +1454,14 @@ class AIEngine:
         interpretation = self.interpret(perception, input_vector)
         workspace["providerAnalysis"] = copy.deepcopy(provider_analysis)
         workspace["internalState"]["bioSignals"] = copy.deepcopy(self.state["bioSignals"])
+        workspace["presentSelf"] = {
+            "here": {"input": copy.deepcopy(perception["input"])},
+            "now": {"timestamp": perception["timestamp"], "cycle": self.state["cycle"] + 1},
+            "self": {
+                **{key: perception["state"][key] for key in ("energy", "curiosity", "confidence", "stability", "lastAction")},
+                "bioSignals": copy.deepcopy(self.state["bioSignals"]),
+            },
+        }
         action = self.decide(perception, workspace)
         prediction = self.predict_action(action, workspace)
         workspace["intention"] = action["type"]
@@ -1467,6 +1476,7 @@ class AIEngine:
         workspace["broadcast"] = {
             "externalInput": workspace["externalInput"],
             "internalState": workspace["internalState"],
+            "presentSelf": workspace["presentSelf"],
             "providerAnalysis": workspace["providerAnalysis"],
             "goal": workspace["goal"],
             "intention": workspace["intention"],

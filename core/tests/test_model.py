@@ -1542,6 +1542,41 @@ console.log(JSON.stringify(Array.from(output)));
         restored = self.model_module.AIEngine.import_model(engine.export_model())
         self.assertEqual(restored.get_state()["workspace"], workspace)
 
+    def test_present_self_tracks_current_input_and_pre_action_state(self):
+        engine = self.model_module.AIEngine()
+        input_value = {"type": "user_input", "value": "hello"}
+        first = engine.step(input_value)
+        present = first["workspace"]["presentSelf"]
+
+        self.assertEqual(present["here"]["input"], input_value)
+        self.assertEqual(present["now"], {"timestamp": first["perception"]["timestamp"], "cycle": 1})
+        self.assertEqual(present["self"]["energy"], first["perception"]["state"]["energy"])
+        self.assertEqual(present["self"]["bioSignals"], first["workspace"]["internalState"]["bioSignals"])
+        self.assertEqual(present, first["workspace"]["broadcast"]["presentSelf"])
+        self.assertIsNone(present["self"]["lastAction"])
+
+        saved = self.model_module.copy.deepcopy(present)
+        input_value["value"] = "changed"
+        second = engine.step(None)
+        self.assertEqual(present, saved)
+        self.assertIsNone(second["workspace"]["presentSelf"]["here"]["input"])
+        self.assertEqual(second["workspace"]["presentSelf"]["now"]["cycle"], 2)
+        self.assertEqual(second["workspace"]["presentSelf"]["self"]["lastAction"], first["action"]["type"])
+        restored = self.model_module.AIEngine.import_model(engine.export_model())
+        self.assertEqual(restored.get_state()["workspace"]["presentSelf"], second["workspace"]["presentSelf"])
+
+    def test_present_self_uses_current_observation_with_supplied_workspace(self):
+        engine = self.model_module.AIEngine()
+        workspace = engine.open_workspace(engine.observe({"type": "old"}), persist=False)
+        engine.state["energy"] = 42
+
+        result = engine.step({"type": "new"}, workspace=workspace)
+
+        present = result["workspace"]["presentSelf"]
+        self.assertEqual(present["here"]["input"], {"type": "new"})
+        self.assertEqual(present["self"]["energy"], 42)
+        self.assertNotIn("presentSelf", workspace)
+
     def test_workspace_goal_guides_learning_when_rules_only_observe(self):
         model = self.model_module.create_model()
         model["state"]["confidence"] = 20

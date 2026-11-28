@@ -48,6 +48,8 @@ Each step reads the input and current state, chooses an action, and updates the 
 
 The engine records a workspace snapshot with the decision, predictions, and outcome. Memory recall uses word overlap, not semantic understanding. When a goal is unmet, observed action effects can help guide the choice; explicit non-`observe` rules still take priority. Uncertainty values are heuristics, not calibrated probabilities, and provider analysis does not control actions.
 
+Each step also records `workspace.presentSelf`, an observational snapshot inspired by Present Self Theory. `here` contains the current input (not an inferred physical location); `now` contains the observation timestamp in milliseconds and the step cycle; and `self` contains the pre-action state, previous action, and current simulated bio signals. It is also included in the workspace broadcast and persists when the model is exported. It does not change action selection.
+
 These are software traces, not biological measurements or evidence of subjective experience. The model does not simulate quantum effects or establish consciousness.
 
 ## Training
