@@ -54,7 +54,7 @@ These are software traces, not biological measurements or evidence of subjective
 
 Train the action policy with `python3 me.py --train-actions --seed 123`. This replaces `noe-action-model.dodl` and its matching GGUF file in the current directory.
 
-See the [training guide](../docs/model-training.md) for options, demonstrations, and safety rules, and the [evaluation guide](../docs/model-evaluation.md) for measuring results.
+See the [training guide](https://github.com/dodle-link/noesis/blob/main/core/docs/model-training.md) for options, demonstrations, and safety rules, and the [evaluation guide](https://github.com/dodle-link/noesis/blob/main/core/docs/model-evaluation.md) for measuring results.
 
 ## Pixel controller
 
@@ -72,7 +72,7 @@ To train a new pixel model, run:
 python3 me.py --train-pixel
 ```
 
-This replaces `noe-pixel-model.dodl` and `noe-pixel-model.F32.gguf`, but leaves `noe-model.dodl` unchanged. The browser runs the saved model; it does not train it. See the [training guide](../docs/model-training.md#pixel-model) for options.
+This replaces `noe-pixel-model.dodl` and `noe-pixel-model.F32.gguf`, but leaves `noe-model.dodl` unchanged. The browser runs the saved model; it does not train it. See the [training guide](https://github.com/dodle-link/noesis/blob/main/core/docs/model-training.md#pixel-model) for options.
 
 ## Files
 
@@ -84,9 +84,9 @@ This replaces `noe-pixel-model.dodl` and `noe-pixel-model.F32.gguf`, but leaves 
 
 ## Reference
 
-- [Model files and API](../docs/model-formats.md): DODL, GGUF, serialization, and merging.
-- [Providers](../docs/model-providers.md): language-model replies and biocomputation gateway integration.
-- [Training](../docs/model-training.md) and [evaluation](../docs/model-evaluation.md): policy training, demonstrations, and measurement.
+- [Model files and API](https://github.com/dodle-link/noesis/blob/main/core/docs/model-formats.md): DODL, GGUF, serialization, and merging.
+- [Providers](https://github.com/dodle-link/noesis/blob/main/core/docs/model-providers.md): language-model replies and biocomputation gateway integration.
+- [Training](https://github.com/dodle-link/noesis/blob/main/core/docs/model-training.md) and [evaluation](https://github.com/dodle-link/noesis/blob/main/core/docs/model-evaluation.md): policy training, demonstrations, and measurement.
 
 ## License and contributing
 
