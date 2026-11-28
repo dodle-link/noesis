@@ -16,7 +16,25 @@ It prints overall and per-action accuracy on a separate 100-scenario held-out se
 
 Use `--samples`, `--epochs`, and `--patience` to adjust training, `--output` to choose a DODL path, and `--seed` to make a run repeatable. The GGUF file uses the same path and base name. Load the trained DODL file to use its policy; rules or eligible goals can still take priority.
 
-Evaluation reports both a majority-class baseline and `rule_baseline_accuracy`. The generated labels are defined by the same threshold policy used by the rule baseline, so a perfect rule-baseline score is expected; compare against real task scenarios before preferring the neural policy.
+Evaluation reports both a majority-class baseline and `rule_baseline_accuracy`. The generated labels are defined by the same threshold policy used by the rule baseline, so a perfect rule-baseline score is expected; compare against real task scenarios before preferring the neural policy. This command imitates the rules and cannot outperform them; use demonstrations or recorded outcomes (below) to learn anything the rules do not already encode.
+
+Training uses softmax cross-entropy, a learning rate that decays by epoch, light weight decay, and element-wise gradient clipping. Validation checkpoints are chosen by accuracy, then cross-entropy; reports include both `mse` (raw outputs against one-hot labels) and `cross_entropy`. `TinyNetwork.learn` still defaults to squared error, so existing callers are unchanged.
+
+Networks with at least `CONFIG["NUMPY_MIN_WEIGHTS"]` first-layer weights use NumPy when it is installed; the default 16x32 network always uses the pure-Python path, so results for default models do not depend on NumPy. Results can differ slightly in the last decimal places between the two paths.
+
+## Train from recorded outcomes
+
+`train_action_model_from_outcomes` fine-tunes a trained policy using the rewards stored in memory (or in episodes you pass in). It applies a reward-weighted policy-gradient step: actions that earned more than the mean reward are reinforced, and those that earned less are discouraged. It returns a new model and leaves the input unchanged.
+
+```python
+from me import load_model_file, train_action_model_from_outcomes
+
+model = load_model_file("noe-action-model.dodl")
+tuned, report = train_action_model_from_outcomes(model, path="noe-outcome-model.dodl", seed=1)
+print(report["episodes"], report["mean_reward"])
+```
+
+The same step is available as `python3 me.py --train-outcomes --model noe-action-model.dodl --output noe-outcome-model.dodl`. Rewards come from the local simulation's `evaluate()`, so this tunes behavior for that simulation only; validate it on held-out scenarios before use. Episodes need `action`, a finite `reward`, and `previousState` with `energy`, `curiosity`, and `confidence`.
 
 ## Train from task demonstrations
 

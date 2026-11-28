@@ -6,7 +6,7 @@ Examples use Python 3 and run from `core/model`. See the [model README](../model
 
 Each step records a workspace snapshot with the input, active goal, recalled episodes, candidate predictions, expected and actual outcomes, and `decisionSource`. A trained action policy can choose among `rest`, `explore`, `learn`, and `observe`.
 
-Recall matches case- and punctuation-normalized words, weighting rarer query words more heavily and using recency to break ties. It is lexical matching, not semantic understanding. When a goal is unmet, observed action effects can guide the choice; unknown actions fall back to the existing policy. Uncertainty values are heuristics based on observation counts and word overlap, not calibrated probabilities.
+Recall matches case- and punctuation-normalized words with light stemming (for example, "learning" and "learned" both match "learn") and adjacent word pairs, weighting rarer query words more heavily and using recency to break ties. It is lexical matching, not semantic understanding. When the memory limit is reached, the entry with the lowest combined score of importance, recency, and reward is evicted, so a new low-importance entry is not automatically the first to go. When a goal is unmet, observed action effects can guide the choice; unknown actions fall back to the existing policy. Uncertainty values are heuristics based on observation counts and word overlap, not calibrated probabilities.
 
 Signals such as `novelty`, `stress`, `recovery`, and `arousal` are bounded software values, not biological measurements.
 

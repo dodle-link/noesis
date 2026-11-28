@@ -1,6 +1,18 @@
 const maxModelSize = 1024 * 1024;
 const maxPixelHiddenSize = 128;
 
+// Input order shared with PIXEL_FEATURES in me.py and createModelInputs() in me.js.
+export const PIXEL_FEATURES = [
+	"x",
+	"y",
+	"velocityX",
+	"velocityY",
+	"pointerDx",
+	"pointerDy",
+	"hasPointer",
+	"excitement",
+];
+
 function readFloatArray(view, offset, length) {
 	const values = new Float32Array(length);
 	for (let index = 0; index < length; index++) {
@@ -34,13 +46,15 @@ export function parsePixelModel(buffer) {
 	);
 	const { inputSize, hiddenSize, outputSize } = metadata.networkShape;
 	if (
-		inputSize !== 8 ||
+		inputSize !== PIXEL_FEATURES.length ||
 		!Number.isSafeInteger(hiddenSize) ||
 		hiddenSize < 1 ||
 		hiddenSize > maxPixelHiddenSize ||
 		outputSize !== 2
 	) {
-		throw new Error("Expected a pixel model with 8 inputs, 2 outputs, and at most 128 hidden units.");
+		throw new Error(
+			`Expected a pixel model with ${PIXEL_FEATURES.length} inputs, 2 outputs, and at most 128 hidden units.`,
+		);
 	}
 	const lengths = [inputSize * hiddenSize, hiddenSize, hiddenSize * outputSize, outputSize];
 	if (networkSize !== lengths.reduce((total, length) => total + length * 4, 0)) {

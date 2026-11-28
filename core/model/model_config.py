@@ -13,6 +13,8 @@ CONFIG = {
     "MAX_WEIGHT": 5,
     "STATE_MIN": 0,
     "STATE_MAX": 100,
+    # Networks with at least this many first-layer weights use NumPy when it is installed.
+    "NUMPY_MIN_WEIGHTS": 4096,
 }
 
 MAGIC = b"DODL"

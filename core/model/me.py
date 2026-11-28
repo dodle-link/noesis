@@ -8,13 +8,11 @@ import copy
 import json
 import math
 import os
-import re
 import secrets
-import struct
 import tempfile
 import time
 
-if __package__:
+try:
     from .model_config import CONFIG, HEADER_SIZE, MAGIC
     from .model_formats import (
         decode_model_from_storage,
@@ -26,6 +24,8 @@ if __package__:
         serialize_model,
         validate_model,
     )
+    from .model_memory import MemoryStore, evaluate_memory_retrieval
+    from .model_network import TinyNetwork, softmax
     from .model_providers import (
         BiocomputationProvider,
         BiocomputationProviderError,
@@ -33,7 +33,9 @@ if __package__:
         LLMProviderError,
         normalize_provider_response,
     )
-else:
+    from .model_rules import BehaviorEngine, RuleEngine, _js_number
+    from .model_utils import Random, clamp, now, random_float, random_int, uuid_bytes
+except ImportError:  # run as a script from core/model
     from model_config import CONFIG, HEADER_SIZE, MAGIC
     from model_formats import (
         decode_model_from_storage,
@@ -45,6 +47,8 @@ else:
         serialize_model,
         validate_model,
     )
+    from model_memory import MemoryStore, evaluate_memory_retrieval
+    from model_network import TinyNetwork, softmax
     from model_providers import (
         BiocomputationProvider,
         BiocomputationProviderError,
@@ -52,49 +56,27 @@ else:
         LLMProviderError,
         normalize_provider_response,
     )
+    from model_rules import BehaviorEngine, RuleEngine, _js_number
+    from model_utils import Random, clamp, now, random_float, random_int, uuid_bytes
 
 
 PIXEL_INPUT_SIZE = 8
 PIXEL_OUTPUT_SIZE = 2
 ACTION_LABELS = ("rest", "explore", "learn", "observe")
 
+# Input-vector layout for action-state-text-v1 and action-context-v2 networks.
+FEATURE_TEXT_LENGTH = 4
+FEATURE_IS_USER_INPUT = 5
+FEATURE_MEMORY_FILL = 6
+FEATURE_TEXT_HASH_START = 7
+FEATURE_TEXT_HASH_END_CONTEXTUAL = 9
+FEATURE_GOAL_GAP_START = 9
+FEATURE_RECALLED_ACTION_START = 12
 
-def clamp(value, minimum, maximum):
-    return max(minimum, min(maximum, value))
-
-
-def random_float(minimum, maximum):
-    return minimum + secrets.randbelow(1 << 53) / (1 << 53) * (maximum - minimum)
-
-
-def random_int(minimum, maximum):
-    return secrets.randbelow(maximum - minimum + 1) + minimum
-
-
-def uuid_bytes():
-    return secrets.token_bytes(16).hex()
-
-
-def now():
-    return int(time.time() * 1000)
-
-
-class Random:
-    def __init__(self, seed=None):
-        if seed is None:
-            seed = now()
-        self.seed = int(seed) & 0xFFFFFFFF or 1
-
-    def next(self):
-        value = self.seed
-        value ^= (value << 13) & 0xFFFFFFFF
-        value ^= value >> 17
-        value ^= (value << 5) & 0xFFFFFFFF
-        self.seed = value & 0xFFFFFFFF
-        return self.seed / 0x100000000
-
-    def float(self, minimum, maximum):
-        return minimum + self.next() * (maximum - minimum)
+# Pixel network layout, mirrored by pixel_model.mjs.
+PIXEL_FEATURES = (
+    "x", "y", "velocityX", "velocityY", "pointerDx", "pointerDy", "hasPointer", "excitement",
+)
 
 
 def create_initial_self_model():
@@ -208,89 +190,6 @@ def create_initial_behavior():
     ]
 
 
-def _float32(value):
-    return struct.unpack("<f", struct.pack("<f", value))[0]
-
-
-class TinyNetwork:
-    def __init__(self, random=None):
-        self.input_size = CONFIG["INPUT_SIZE"]
-        self.hidden_size = CONFIG["HIDDEN_SIZE"]
-        self.output_size = CONFIG["OUTPUT_SIZE"]
-        self.weights1 = array("f", [0]) * (self.input_size * self.hidden_size)
-        self.bias1 = array("f", [0]) * self.hidden_size
-        self.weights2 = array("f", [0]) * (self.hidden_size * self.output_size)
-        self.bias2 = array("f", [0]) * self.output_size
-        self.initialize(random or Random())
-
-    def initialize(self, random):
-        for index in range(len(self.weights1)):
-            self.weights1[index] = random.float(-0.1, 0.1)
-        for index in range(len(self.weights2)):
-            self.weights2[index] = random.float(-0.1, 0.1)
-        self.bias1 = array("f", [0]) * self.hidden_size
-        self.bias2 = array("f", [0]) * self.output_size
-
-    @staticmethod
-    def relu(value):
-        return max(0, value)
-
-    def forward(self, input_vector):
-        hidden = array("f", [0]) * self.hidden_size
-        output = array("f", [0]) * self.output_size
-        for hidden_index in range(self.hidden_size):
-            total = self.bias1[hidden_index]
-            start = hidden_index * self.input_size
-            for input_index in range(self.input_size):
-                total += input_vector[input_index] * self.weights1[start + input_index]
-            hidden[hidden_index] = self.relu(total)
-        for output_index in range(self.output_size):
-            total = self.bias2[output_index]
-            start = output_index * self.hidden_size
-            for hidden_index in range(self.hidden_size):
-                total += hidden[hidden_index] * self.weights2[start + hidden_index]
-            output[output_index] = total
-        return {"hidden": hidden, "output": output}
-
-    def learn(self, input_vector, target, learning_rate):
-        result = self.forward(input_vector)
-        hidden = result["hidden"]
-        output = result["output"]
-        hidden_errors = array("f", [0]) * self.hidden_size
-        for hidden_index in range(self.hidden_size):
-            if hidden[hidden_index] <= 0:
-                continue
-            for output_index in range(self.output_size):
-                hidden_errors[hidden_index] += (
-                    (target[output_index] - output[output_index])
-                    * self.weights2[output_index * self.hidden_size + hidden_index]
-                )
-
-        for output_index in range(self.output_size):
-            output_error = target[output_index] - output[output_index]
-            start = output_index * self.hidden_size
-            for hidden_index in range(self.hidden_size):
-                index = start + hidden_index
-                self.weights2[index] = clamp(
-                    self.weights2[index] + learning_rate * output_error * hidden[hidden_index],
-                    CONFIG["MIN_WEIGHT"],
-                    CONFIG["MAX_WEIGHT"],
-                )
-            self.bias2[output_index] += learning_rate * output_error
-
-        for hidden_index in range(self.hidden_size):
-            error = hidden_errors[hidden_index]
-            start = hidden_index * self.input_size
-            for input_index in range(self.input_size):
-                index = start + input_index
-                self.weights1[index] = clamp(
-                    self.weights1[index] + learning_rate * error * input_vector[input_index],
-                    CONFIG["MIN_WEIGHT"],
-                    CONFIG["MAX_WEIGHT"],
-                )
-            self.bias1[hidden_index] += learning_rate * error
-
-
 def _pixel_training_example(random):
     x = random.next()
     y = random.next()
@@ -348,6 +247,13 @@ def _pixel_validation_metrics(network, examples):
     }
 
 
+ACTION_LEARNING_RATE = 0.05
+ACTION_LEARNING_RATE_DECAY = 0.1
+ACTION_WEIGHT_DECAY = 1e-4
+ACTION_GRAD_CLIP = 1.0
+PIXEL_LEARNING_RATE = 0.01
+
+
 def _action_policy_target(energy, curiosity, confidence):
     if energy < 20:
         return "rest"
@@ -389,6 +295,7 @@ def _action_policy_metrics(network, examples):
     correct = 0
     rule_baseline_correct = 0
     squared_error = 0.0
+    cross_entropy = 0.0
     class_totals = {label: 0 for label in ACTION_LABELS}
     class_correct = {label: 0 for label in ACTION_LABELS}
     for inputs, target in examples:
@@ -407,12 +314,14 @@ def _action_policy_metrics(network, examples):
         for index, output in enumerate(outputs[: len(ACTION_LABELS)]):
             expected = 1.0 if index == target_index else 0.0
             squared_error += (output - expected) ** 2
+        cross_entropy -= math.log(max(softmax(outputs[: len(ACTION_LABELS)])[target_index], 1e-12))
     sample_count = len(examples)
     return {
         "accuracy": correct / sample_count,
         "baseline_accuracy": max(class_totals.values()) / sample_count,
         "rule_baseline_accuracy": rule_baseline_correct / sample_count,
         "mse": squared_error / (sample_count * len(ACTION_LABELS)),
+        "cross_entropy": cross_entropy / sample_count,
         "per_action_accuracy": {
             label: class_correct[label] / class_totals[label]
             if class_totals[label]
@@ -425,10 +334,12 @@ def _action_policy_metrics(network, examples):
 
 def _network_from_model(model):
     stored = model["network"]
-    network = TinyNetwork(Random(1))
-    network.input_size = stored["inputSize"]
-    network.hidden_size = stored["hiddenSize"]
-    network.output_size = stored["outputSize"]
+    network = TinyNetwork(
+        Random(1),
+        input_size=stored["inputSize"],
+        hidden_size=stored["hiddenSize"],
+        output_size=stored["outputSize"],
+    )
     network.weights1 = stored["weights1"]
     network.bias1 = stored["bias1"]
     network.weights2 = stored["weights2"]
@@ -469,19 +380,11 @@ def train_action_model(
         raise ValueError("metrics_callback must be callable.")
 
     random = Random(seed if seed is not None else random_int(1, 0xFFFFFFFF))
-    model = create_model()
-    network = TinyNetwork(random)
-    network.input_size = CONFIG["INPUT_SIZE"]
-    network.hidden_size = CONFIG["HIDDEN_SIZE"]
-    network.output_size = len(ACTION_LABELS)
-    network.weights1 = array("f", [0]) * (network.input_size * network.hidden_size)
-    network.bias1 = array("f", [0]) * network.hidden_size
-    network.weights2 = array("f", [0]) * (network.hidden_size * network.output_size)
-    network.bias2 = array("f", [0]) * network.output_size
-    network.initialize(random)
+    model = create_model(seed=random.seed)
+    network = TinyNetwork(random, output_size=len(ACTION_LABELS))
     for hidden_index in range(network.hidden_size):
         start = hidden_index * network.input_size
-        for input_index in range(4, network.input_size):
+        for input_index in range(FEATURE_TEXT_LENGTH, network.input_size):
             network.weights1[start + input_index] = 0
 
     examples = [
@@ -500,14 +403,18 @@ def train_action_model(
         for index in range(sample_count - 1, 0, -1):
             swap_index = int(random.next() * (index + 1))
             examples[index], examples[swap_index] = examples[swap_index], examples[index]
+        learning_rate = ACTION_LEARNING_RATE / (1 + ACTION_LEARNING_RATE_DECAY * (epoch - 1))
         for inputs, label in examples:
             targets = array("f", [0]) * len(ACTION_LABELS)
             targets[ACTION_LABELS.index(label)] = 1
-            network.learn(inputs, targets, 0.03)
+            network.learn(
+                inputs, targets, learning_rate,
+                loss="cross_entropy", weight_decay=ACTION_WEIGHT_DECAY, grad_clip=ACTION_GRAD_CLIP,
+            )
         metrics = _action_policy_metrics(network, validation_examples)
         if metrics_callback is not None:
             metrics_callback(epoch, metrics)
-        score = (metrics["accuracy"], -metrics["mse"])
+        score = (metrics["accuracy"], -metrics["cross_entropy"])
         if score > best_score:
             best_score = score
             best_weights = {
@@ -533,7 +440,7 @@ def train_action_model(
         "weights2": network.weights2,
         "bias2": network.bias2,
         "policyTrained": True,
-        "trainingMethod": "threshold-imitation-v1",
+        "trainingMethod": "threshold-imitation-v2",
         "featureSchema": "action-state-text-v1",
     }
     model["updatedAt"] = now()
@@ -562,16 +469,8 @@ def train_pixel_model(
         raise ValueError("metrics_callback must be callable.")
 
     random = Random(seed if seed is not None else random_int(1, 0xFFFFFFFF))
-    model = create_model()
-    network = TinyNetwork(random)
-    network.input_size = PIXEL_INPUT_SIZE
-    network.hidden_size = CONFIG["HIDDEN_SIZE"]
-    network.output_size = PIXEL_OUTPUT_SIZE
-    network.weights1 = array("f", [0]) * (network.input_size * network.hidden_size)
-    network.bias1 = array("f", [0]) * network.hidden_size
-    network.weights2 = array("f", [0]) * (network.hidden_size * network.output_size)
-    network.bias2 = array("f", [0]) * network.output_size
-    network.initialize(random)
+    model = create_model(seed=random.seed)
+    network = TinyNetwork(random, input_size=PIXEL_INPUT_SIZE, output_size=PIXEL_OUTPUT_SIZE)
 
     validation_count = max(128, min(512, sample_count // 5))
     validation_examples = [_pixel_training_example(random) for _ in range(validation_count)]
@@ -583,8 +482,9 @@ def train_pixel_model(
         for index in range(sample_count - 1, 0, -1):
             swap_index = int(random.next() * (index + 1))
             examples[index], examples[swap_index] = examples[swap_index], examples[index]
+        learning_rate = PIXEL_LEARNING_RATE / (1 + ACTION_LEARNING_RATE_DECAY * (epoch - 1))
         for inputs, targets in examples:
-            network.learn(inputs, targets, 0.01)
+            network.learn(inputs, targets, learning_rate, weight_decay=ACTION_WEIGHT_DECAY)
         metrics = _pixel_validation_metrics(network, validation_examples)
         if metrics_callback is not None:
             metrics_callback(epoch, metrics)
@@ -623,246 +523,74 @@ def train_pixel_model(
     return model
 
 
-class MemoryStore:
-    def __init__(self, memory=None):
-        self.items = memory if memory is not None else []
+def train_action_model_from_outcomes(
+    model, episodes=None, *, path=None, epochs=3, learning_rate=0.02, seed=1
+):
+    """Fine-tune a trained policy with reward-weighted policy-gradient steps on recorded outcomes.
 
-    def add(self, memory):
-        item = {
-                "id": uuid_bytes(),
-                "timestamp": now(),
-                "input": memory.get("input"),
-                "action": memory.get("action"),
-                "result": memory.get("result"),
-                "reward": memory.get("reward"),
-                "importance": clamp(memory.get("importance", 50), 0, 100),
-            }
-        for key in ("previousState", "prediction", "outcome"):
-            if key in memory:
-                item[key] = copy.deepcopy(memory[key])
-        self.items.append(item)
-        self.limit()
+    Episodes default to the model's own memory. Actions that earned more than the mean reward
+    are reinforced and those that earned less are discouraged; rules still override the policy.
+    """
+    if not isinstance(model, dict):
+        model = load_model_file(model)
+    validate_model(model)
+    network_info = model["network"]
+    if not network_info.get("policyTrained") or network_info["outputSize"] < len(ACTION_LABELS):
+        raise ValueError("A trained action policy is required.")
+    if not isinstance(epochs, int) or isinstance(epochs, bool) or epochs < 1:
+        raise ValueError("epochs must be a positive integer.")
+    if isinstance(learning_rate, bool) or not isinstance(learning_rate, (int, float)) or not 0 < learning_rate < math.inf:
+        raise ValueError("learning_rate must be a positive finite number.")
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise ValueError("seed must be an integer.")
 
-    def limit(self):
-        while len(self.items) > CONFIG["MEMORY_LIMIT"]:
-            least_important = min(
-                range(len(self.items)), key=lambda index: self.items[index]["importance"]
+    def finite_number(value):
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+    metrics = ("energy", "curiosity", "confidence")
+    usable = [
+        episode for episode in (model["memory"] if episodes is None else episodes)
+        if isinstance(episode, dict) and episode.get("action") in ACTION_LABELS
+        and finite_number(episode.get("reward")) and isinstance(episode.get("previousState"), dict)
+        and all(finite_number(episode["previousState"].get(key)) for key in metrics)
+    ]
+    if not usable:
+        raise ValueError("No usable outcome episodes.")
+
+    result = copy.deepcopy(model)
+    # Recall features are built without memory so an episode never retrieves itself.
+    feature_model = copy.deepcopy(model)
+    feature_model["memory"] = []
+    engine = AIEngine(feature_model)
+    examples = []
+    for episode in usable:
+        engine.state.update({key: episode["previousState"][key] for key in metrics})
+        examples.append((engine.encode_input(episode.get("input")), episode["action"], episode["reward"]))
+    mean_reward = sum(reward for _, _, reward in examples) / len(examples)
+
+    random = Random(seed)
+    network = _network_from_model(result)
+    for _ in range(epochs):
+        for index in range(len(examples) - 1, 0, -1):
+            swap_index = int(random.next() * (index + 1))
+            examples[index], examples[swap_index] = examples[swap_index], examples[index]
+        for inputs, action, reward in examples:
+            targets = array("f", [0]) * network.output_size
+            targets[ACTION_LABELS.index(action)] = 1
+            network.learn(
+                inputs, targets, learning_rate * (reward - mean_reward),
+                loss="cross_entropy", grad_clip=ACTION_GRAD_CLIP,
             )
-            self.items.pop(least_important)
-
-    def get_recent(self, count=10):
-        return self.items[-count:]
-
-    def recall(self, input_value, count=3):
-        text = input_value.get("value") if isinstance(input_value, dict) else None
-        tokens = set(re.findall(r"\w+", text.casefold())) if isinstance(text, str) else set()
-        if not tokens:
-            return []
-        documents = []
-        for index, item in enumerate(self.items):
-            stored_input = item.get("input")
-            stored_text = stored_input.get("value") if isinstance(stored_input, dict) else None
-            if not isinstance(stored_text, str):
-                continue
-            stored_tokens = set(re.findall(r"\w+", stored_text.casefold()))
-            documents.append((index, item, stored_tokens))
-        weights = {
-            token: 1 + math.log((len(documents) + 1) / (1 + sum(token in document for _, _, document in documents)))
-            for token in tokens
-        }
-        matches = []
-        for index, item, stored_tokens in documents:
-            overlap = tokens & stored_tokens
-            if not overlap:
-                continue
-            relevance = sum(weights[token] for token in overlap) / (
-                sum(weights.values()) + len(stored_tokens - tokens)
-            )
-            recency = (index + 1) / max(len(self.items), 1)
-            matches.append((relevance, recency, item))
-        matches.sort(key=lambda match: (match[0], match[1]), reverse=True)
-        return [
-            {"episode": copy.deepcopy(item), "relevance": relevance,
-             "recency": recency, "uncertainty": 1 - relevance}
-            for relevance, recency, item in matches[:count]
-        ]
-
-    def clear(self):
-        self.items.clear()
+    result["network"]["trainingMethod"] = "outcome-policy-gradient-v1"
+    result["updatedAt"] = now()
+    if path is not None:
+        gguf_path = os.path.splitext(os.fsdecode(path))[0] + ".F32.gguf"
+        _write_model_artifacts(((path, serialize_model(result)), (gguf_path, serialize_gguf_model(result))))
+    return result, {"episodes": len(examples), "mean_reward": mean_reward, "epochs": epochs}
 
 
-def evaluate_memory_retrieval(memory, queries, count=3):
-    """Score labeled retrieval queries against an existing memory store."""
-    if not isinstance(memory, MemoryStore):
-        raise ValueError("memory must be a MemoryStore.")
-    if isinstance(count, bool) or not isinstance(count, int) or count < 1:
-        raise ValueError("count must be a positive integer.")
-    if not isinstance(queries, list) or not queries:
-        raise ValueError("queries must be a non-empty list.")
-    recall = 0.0
-    reciprocal_rank = 0.0
-    positive_queries = 0
-    negative_queries = 0
-    false_positives = 0
-    for query in queries:
-        if not isinstance(query, dict) or not isinstance(query.get("relevant_ids"), list):
-            raise ValueError("Each query must have a relevant_ids list.")
-        relevant = query["relevant_ids"]
-        if any(not isinstance(identifier, str) or not identifier for identifier in relevant) or len(set(relevant)) != len(relevant):
-            raise ValueError("Relevant IDs must be distinct non-empty strings.")
-        known_ids = {item.get("id") for item in memory.items}
-        if not set(relevant) <= known_ids:
-            raise ValueError("Relevant IDs must exist in memory.")
-        found = [match["episode"]["id"] for match in memory.recall(query.get("input"), count)]
-        if not relevant:
-            negative_queries += 1
-            false_positives += bool(found)
-            continue
-        positive_queries += 1
-        recall += len(set(found) & set(relevant)) / len(relevant)
-        reciprocal_rank += next((1 / rank for rank, identifier in enumerate(found, 1) if identifier in relevant), 0)
-    return {"queries": len(queries), "count": count,
-            "recall": recall / positive_queries if positive_queries else None,
-            "mrr": reciprocal_rank / positive_queries if positive_queries else None,
-            "positive_queries": positive_queries, "negative_queries": negative_queries,
-            "false_positive_rate": false_positives / negative_queries if negative_queries else None}
-
-
-def _js_number(value):
-    if value is None:
-        return 0
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return math.nan
-
-
-class RuleEngine:
-    def __init__(self, rules=None):
-        self.rules = rules if rules is not None else []
-
-    def evaluate_condition(self, condition, state):
-        if not condition:
-            return False
-        condition_type = condition.get("type")
-        variable = condition.get("variable")
-        if condition_type == "always":
-            return True
-        if condition_type == "less-than":
-            return _js_number(state.get(variable)) < condition.get("value")
-        if condition_type == "greater-than":
-            return _js_number(state.get(variable)) > condition.get("value")
-        if condition_type == "equals":
-            value = state.get(variable)
-            expected = condition.get("value")
-            return type(value) is type(expected) and value == expected
-        return False
-
-    def get_applicable(self, state):
-        applicable = [
-            rule
-            for rule in self.rules
-            if rule.get("enabled") and self.evaluate_condition(rule.get("condition"), state)
-        ]
-        return sorted(applicable, key=lambda rule: (rule.get("safety", False), rule["priority"]), reverse=True)
-
-    def select(self, state):
-        applicable = self.get_applicable(state)
-        return applicable[0] if applicable else None
-
-    def reward(self, rule_id, reward):
-        rule = next((item for item in self.rules if item.get("id") == rule_id), None)
-        if rule and not rule.get("safety", False):
-            if reward > 0:
-                rule["success"] += 1
-                rule["priority"] += 1
-            else:
-                rule["failure"] += 1
-                rule["priority"] -= 1
-            rule["priority"] = clamp(rule["priority"], 0, 1000)
-
-    def evolve(self):
-        for rule in self.rules:
-            if rule.get("safety", False):
-                continue
-            total = rule["success"] + rule["failure"]
-            if total >= 10 and rule["success"] / total < 0.1:
-                rule["enabled"] = False
-        if len(self.rules) > CONFIG["RULE_LIMIT"]:
-            self.rules = sorted(self.rules, key=lambda rule: (rule.get("safety", False), rule["priority"]), reverse=True)[
-                : CONFIG["RULE_LIMIT"]
-            ]
-
-
-class BehaviorEngine:
-    def __init__(self, program=None):
-        self.program = program if program is not None else []
-
-    def run(self, state):
-        action = "observe"
-        value_stack = []
-        conditions = []
-        for index, instruction in enumerate(self.program):
-            if index >= CONFIG["BEHAVIOR_LIMIT"]:
-                break
-            if not instruction:
-                continue
-            op = instruction[0]
-            arg = instruction[1] if len(instruction) > 1 else None
-            if op == "READ":
-                value_stack.append(state.get(arg))
-            elif op == "LESS_THAN":
-                value = value_stack.pop() if value_stack else None
-                value_stack.append(_js_number(value) < arg)
-            elif op == "GREATER_THAN":
-                value = value_stack.pop() if value_stack else None
-                value_stack.append(_js_number(value) > arg)
-            elif op == "IF":
-                condition = bool(value_stack.pop()) if value_stack else False
-                conditions.append({"condition": condition, "in_else": False})
-            elif op == "ELSE":
-                if conditions:
-                    conditions[-1]["in_else"] = True
-            elif op == "ACTION" and all(
-                condition["condition"] != condition["in_else"]
-                for condition in conditions
-            ):
-                action = arg
-            elif op == "END":
-                if conditions:
-                    conditions.pop()
-        return action
-
-    def mutate(self, random):
-        if len(self.program) >= CONFIG["BEHAVIOR_LIMIT"]:
-            return
-        actions = ["rest", "explore", "observe", "learn"]
-        mutation = int(random.next() * 3)
-        if mutation == 0:
-            action_index = int(random.next() * len(actions))
-            self.program.append(["ACTION", actions[action_index]])
-        elif mutation == 1:
-            action_indexes = [
-                index
-                for index, instruction in enumerate(self.program)
-                if instruction and instruction[0] == "ACTION"
-            ]
-            if action_indexes:
-                index = action_indexes[int(random.next() * len(action_indexes))]
-                self.program.pop(index)
-        else:
-            comparisons = [
-                instruction
-                for instruction in self.program
-                if instruction and instruction[0] in ("LESS_THAN", "GREATER_THAN")
-            ]
-            if comparisons:
-                instruction = comparisons[int(random.next() * len(comparisons))]
-                instruction[1] = int(random.next() * 91) + 5
-
-
-def create_model():
-    random = Random(random_int(1, 0xFFFFFFFF))
+def create_model(seed=None):
+    random = Random(seed if seed is not None else random_int(1, 0xFFFFFFFF))
     network = TinyNetwork(random)
     timestamp = now()
     return {
@@ -1081,8 +809,8 @@ def _write_model_artifacts(artifacts):
                 pass
 
 
-def create_model_file(path):
-    model = create_model()
+def create_model_file(path, seed=None):
+    model = create_model(seed)
     _write_model_artifacts(((path, serialize_model(model)),))
     return model
 
@@ -1145,10 +873,10 @@ class AIEngine:
             vector[index] = value
         if isinstance(input_value, dict):
             value = input_value.get("value")
-            if isinstance(value, str) and len(vector) > 4:
-                vector[4] = min(len(value) / 100, 1)
-                feature_start = 7
-                feature_end = 9 if contextual else len(vector)
+            if isinstance(value, str) and len(vector) > FEATURE_TEXT_LENGTH:
+                vector[FEATURE_TEXT_LENGTH] = min(len(value) / 100, 1)
+                feature_start = FEATURE_TEXT_HASH_START
+                feature_end = FEATURE_TEXT_HASH_END_CONTEXTUAL if contextual else len(vector)
                 feature_count = feature_end - feature_start
                 if feature_count > 0:
                     for token in value.lower().split():
@@ -1163,20 +891,20 @@ class AIEngine:
                     if magnitude > 1:
                         for index in range(feature_start, feature_end):
                             vector[index] /= magnitude
-            if input_value.get("type") == "user_input" and len(vector) > 5:
-                vector[5] = 1
-        if len(vector) > 6:
-            vector[6] = min(len(self.memory.items) / CONFIG["MEMORY_LIMIT"], 1)
+            if input_value.get("type") == "user_input" and len(vector) > FEATURE_IS_USER_INPUT:
+                vector[FEATURE_IS_USER_INPUT] = 1
+        if len(vector) > FEATURE_MEMORY_FILL:
+            vector[FEATURE_MEMORY_FILL] = min(len(self.memory.items) / CONFIG["MEMORY_LIMIT"], 1)
         if contextual:
             goal = next((goal for goal in self.goals if goal.get("id") == workspace.get("goal")), None)
             if goal:
-                for index, key in enumerate(("energy", "curiosity", "confidence"), 9):
+                for index, key in enumerate(("energy", "curiosity", "confidence"), FEATURE_GOAL_GAP_START):
                     target = goal.get("target", {}).get(key + "Min", goal.get("target", {}).get(key, self.state[key]))
                     vector[index] = clamp((target - self.state[key]) / 100, 0, 1)
             for match in workspace.get("memories", []):
                 action = match["episode"].get("action")
                 if action in ACTION_LABELS:
-                    index = 12 + ACTION_LABELS.index(action)
+                    index = FEATURE_RECALLED_ACTION_START + ACTION_LABELS.index(action)
                     vector[index] = max(vector[index], match["relevance"])
         return vector
 
@@ -1854,16 +1582,20 @@ def train_action_model_from_episodes(path, training_episodes, validation_episode
     network = TinyNetwork(random)
     best_weights = None
     best_score = (-1.0, float("-inf"))
-    for _ in range(epochs):
+    for epoch in range(epochs):
         for index in range(len(examples) - 1, 0, -1):
             swap_index = int(random.next() * (index + 1))
             examples[index], examples[swap_index] = examples[swap_index], examples[index]
+        learning_rate = ACTION_LEARNING_RATE / (1 + ACTION_LEARNING_RATE_DECAY * epoch)
         for inputs, action in examples:
             targets = array("f", [0]) * network.output_size
             targets[ACTION_LABELS.index(action)] = 1
-            network.learn(inputs, targets, 0.03)
+            network.learn(
+                inputs, targets, learning_rate,
+                loss="cross_entropy", weight_decay=ACTION_WEIGHT_DECAY, grad_clip=ACTION_GRAD_CLIP,
+            )
         metrics = _action_policy_metrics(network, validation)
-        score = (metrics["accuracy"], -metrics["mse"])
+        score = (metrics["accuracy"], -metrics["cross_entropy"])
         if score > best_score:
             best_score = score
             best_weights = {key: array("f", getattr(network, key)) for key in ("weights1", "bias1", "weights2", "bias2")}
@@ -1904,6 +1636,10 @@ if __name__ == "__main__":
         help="Train an action-selection model and write noe-action-model.dodl.",
     )
     training_modes.add_argument("--train-demonstrations", metavar="JSON", help="Train from demonstration splits in a JSON file.")
+    training_modes.add_argument(
+        "--train-outcomes", action="store_true",
+        help="Fine-tune the trained policy in --model from its recorded outcomes and write --output.",
+    )
     training_modes.add_argument("--evaluate-scenarios", metavar="JSON", help="Evaluate scenario objects from a JSON file.")
     training_modes.add_argument("--evaluate-outcomes", metavar="JSON", help="Evaluate application outcome records from a JSON file.")
     training_modes.add_argument("--evaluate-memory", metavar="JSON", help="Evaluate retrieval queries from a JSON file.")
@@ -1939,6 +1675,14 @@ if __name__ == "__main__":
         else:
             report = evaluate_memory_retrieval(MemoryStore(load_model_file(arguments.model)["memory"]), dataset)
         print(json.dumps(report, indent=2, allow_nan=False))
+    elif arguments.train_outcomes:
+        output_path = arguments.output or "noe-outcome-model.dodl"
+        _, report = train_action_model_from_outcomes(
+            arguments.model, path=output_path,
+            seed=arguments.seed if arguments.seed is not None else 1,
+        )
+        print(json.dumps(report, indent=2, allow_nan=False))
+        print(f"Outcome-tuned model written: {output_path}")
     elif arguments.train_actions:
         output_path = arguments.output or "noe-action-model.dodl"
 
@@ -1995,7 +1739,7 @@ if __name__ == "__main__":
         print(f"Pixel control model trained: {output_path}")
         print(f"GGUF model file created: {gguf_output_path}")
     else:
-        model = create_model_file(output_path)
+        model = create_model_file(output_path, arguments.seed)
         print(f"Model file created: {output_path}")
         gguf_output_path = "noe-model.F32.gguf"
         create_gguf_model_file(gguf_output_path, model)

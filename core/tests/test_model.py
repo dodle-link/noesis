@@ -3,6 +3,7 @@ import io
 import json
 import math
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -176,6 +177,189 @@ class ModelFileTests(unittest.TestCase):
 
         self.assertAlmostEqual(network.weights2[0], 1.8)
         self.assertAlmostEqual(network.weights1[0], 0.6)
+
+    def _single_unit_network(self):
+        network = self.model_module.TinyNetwork(
+            self.model_module.Random(1), input_size=1, hidden_size=1, output_size=1
+        )
+        network.weights1 = self.model_module.array("f", [1])
+        network.bias1 = self.model_module.array("f", [0])
+        network.weights2 = self.model_module.array("f", [2])
+        network.bias2 = self.model_module.array("f", [0])
+        return network
+
+    def test_network_weight_decay_and_gradient_clipping(self):
+        one = self.model_module.array("f", [1])
+        zero = self.model_module.array("f", [0])
+        decayed = self._single_unit_network()
+        decayed.learn(one, zero, 0.1, weight_decay=1.0)
+        self.assertAlmostEqual(decayed.weights2[0], 1.6)
+        self.assertAlmostEqual(decayed.weights1[0], 0.5)
+        clipped = self._single_unit_network()
+        clipped.learn(one, zero, 0.1, grad_clip=0.5)
+        self.assertAlmostEqual(clipped.weights2[0], 1.95)
+        self.assertAlmostEqual(clipped.weights1[0], 0.95)
+        with self.assertRaisesRegex(ValueError, "loss"):
+            clipped.learn(one, zero, 0.1, loss="hinge")
+
+    def test_cross_entropy_learning_moves_probability_toward_target(self):
+        network = self.model_module.TinyNetwork(
+            self.model_module.Random(3), input_size=2, hidden_size=4, output_size=3
+        )
+        inputs = self.model_module.array("f", [1, 0.5])
+        target = self.model_module.array("f", [0, 1, 0])
+        before = network.probabilities(inputs)[1]
+        for _ in range(50):
+            network.learn(inputs, target, 0.1, loss="cross_entropy")
+        after = network.probabilities(inputs)
+        self.assertGreater(after[1], max(before, 0.9))
+        self.assertAlmostEqual(sum(after), 1.0)
+
+    def test_initial_weights_scale_with_layer_fan_in(self):
+        network = self.model_module.TinyNetwork(self.model_module.Random(5))
+        limit = math.sqrt(6 / network.input_size)
+        self.assertLessEqual(max(abs(value) for value in network.weights1), limit)
+        self.assertGreater(max(abs(value) for value in network.weights1), 0.1)
+
+    def test_numpy_path_matches_pure_python(self):
+        try:
+            import numpy  # noqa: F401
+        except ImportError:
+            self.skipTest("NumPy is optional.")
+        random = self.model_module.Random(9)
+        vectorized = self.model_module.TinyNetwork(random, input_size=64, hidden_size=64, output_size=4)
+        reference = self.model_module.TinyNetwork(random, input_size=64, hidden_size=64, output_size=4)
+        for key in ("weights1", "bias1", "weights2", "bias2"):
+            setattr(reference, key, self.model_module.array("f", getattr(vectorized, key)))
+        inputs = self.model_module.array("f", [random.float(-1, 1) for _ in range(64)])
+        target = self.model_module.array("f", [0, 0, 1, 0])
+        with patch.dict(self.model_module.CONFIG, {"NUMPY_MIN_WEIGHTS": 10**9}):
+            self.assertIsNone(reference._numpy_views())
+        self.assertIsNotNone(vectorized._numpy_views())
+        for _ in range(5):
+            vectorized.learn(inputs, target, 0.05, loss="cross_entropy", weight_decay=1e-3, grad_clip=1.0)
+            with patch.dict(self.model_module.CONFIG, {"NUMPY_MIN_WEIGHTS": 10**9}):
+                reference.learn(inputs, target, 0.05, loss="cross_entropy", weight_decay=1e-3, grad_clip=1.0)
+        for key in ("weights1", "bias1", "weights2", "bias2"):
+            for first, second in zip(getattr(vectorized, key), getattr(reference, key)):
+                self.assertAlmostEqual(first, second, places=4)
+        with patch.dict(self.model_module.CONFIG, {"NUMPY_MIN_WEIGHTS": 10**9}):
+            expected = reference.forward(inputs)["output"]
+        for first, second in zip(vectorized.forward(inputs)["output"], expected):
+            self.assertAlmostEqual(first, second, places=4)
+
+    def test_create_model_with_seed_is_reproducible(self):
+        first = self.model_module.create_model(seed=11)
+        second = self.model_module.create_model(seed=11)
+        self.assertEqual(first["randomSeed"], second["randomSeed"])
+        for key in ("weights1", "bias1", "weights2", "bias2"):
+            self.assertEqual(list(first["network"][key]), list(second["network"][key]))
+        self.assertNotEqual(first["id"], second["id"])
+
+    def test_pixel_feature_layout_matches_browser_module(self):
+        source_path = os.path.join(os.path.dirname(self.model_module.__file__), "pixel_model.mjs")
+        with open(source_path, encoding="utf-8") as source:
+            match = re.search(r"PIXEL_FEATURES = \[(.*?)\];", source.read(), re.S)
+        self.assertIsNotNone(match)
+        self.assertEqual(re.findall(r'"(\w+)"', match.group(1)), list(self.model_module.PIXEL_FEATURES))
+        self.assertEqual(len(self.model_module.PIXEL_FEATURES), self.model_module.PIXEL_INPUT_SIZE)
+
+    def test_memory_recall_matches_word_forms_and_prefers_phrases(self):
+        memory = self.model_module.MemoryStore()
+        memory.add({"input": {"value": "learning rules quickly"}})
+        matches = memory.recall({"value": "learned rule"})
+        self.assertEqual(len(matches), 1)
+        phrases = self.model_module.MemoryStore()
+        phrases.add({"input": {"value": "apple red pie"}})
+        phrases.add({"input": {"value": "red apple pie"}})
+        self.assertEqual(phrases.recall({"value": "red apple"})[0]["episode"]["id"], phrases.items[1]["id"])
+
+    def test_memory_retrieval_benchmark_stays_accurate(self):
+        memory = self.model_module.MemoryStore()
+        for text in (
+            "reset my account password",
+            "billing invoice was charged twice",
+            "cannot login to the app",
+            "how to export data to csv",
+        ):
+            memory.add({"input": {"value": text}})
+        ids = [item["id"] for item in memory.items]
+        metrics = self.model_module.evaluate_memory_retrieval(memory, [
+            {"input": {"value": "password reset"}, "relevant_ids": [ids[0]]},
+            {"input": {"value": "charged twice on invoice"}, "relevant_ids": [ids[1]]},
+            {"input": {"value": "login problems"}, "relevant_ids": [ids[2]]},
+            {"input": {"value": "exporting data"}, "relevant_ids": [ids[3]]},
+            {"input": {"value": "weather forecast"}, "relevant_ids": []},
+        ], count=1)
+        self.assertEqual(metrics["recall"], 1.0)
+        self.assertEqual(metrics["mrr"], 1.0)
+        self.assertEqual(metrics["false_positive_rate"], 0.0)
+
+    def test_memory_eviction_uses_reward_and_recency_when_importance_ties(self):
+        memory = self.model_module.MemoryStore()
+        with patch.dict(self.model_module.CONFIG, {"MEMORY_LIMIT": 3}):
+            for action, reward in (("rewarded", 1), ("punished", -1), ("neutral", 0), ("latest", 0)):
+                memory.add({"action": action, "reward": reward, "importance": 50})
+        self.assertEqual(
+            [item["action"] for item in memory.items], ["rewarded", "neutral", "latest"]
+        )
+
+    def test_load_model_file_rejects_corrupt_files(self):
+        valid = self.model_module.serialize_model(self.model_module.create_model(seed=1))
+        with tempfile.TemporaryDirectory(prefix="corrupt-model-tests-") as directory:
+            for name, data in (
+                ("empty.dodl", b""),
+                ("garbage.dodl", b"not a model at all"),
+                ("truncated.dodl", valid[: len(valid) // 2]),
+                ("trailing.dodl", valid + b"extra"),
+                ("header-only.dodl", valid[:16]),
+            ):
+                path = os.path.join(directory, name)
+                with open(path, "wb") as model_file:
+                    model_file.write(data)
+                with self.subTest(name=name), self.assertRaises(ValueError):
+                    self.model_module.load_model_file(path)
+
+    def test_outcome_training_reinforces_rewarded_actions_without_mutating_input(self):
+        with tempfile.TemporaryDirectory(prefix="outcome-model-tests-") as directory:
+            base = self.model_module.train_action_model(
+                os.path.join(directory, "base.dodl"), sample_count=200, epochs=3, seed=3
+            )
+            before_weights = list(base["network"]["weights2"])
+            state = {"energy": 50, "curiosity": 50, "confidence": 50}
+            episodes = [
+                {"action": "explore", "reward": 1.5, "previousState": state, "input": None}
+                for _ in range(20)
+            ] + [
+                {"action": "observe", "reward": -0.2, "previousState": state, "input": None}
+                for _ in range(20)
+            ]
+            inputs = self.model_module._action_policy_example(50, 50, 50)[0]
+            labels = self.model_module.ACTION_LABELS
+            before = self.model_module._network_from_model(base).probabilities(inputs)
+            tuned, report = self.model_module.train_action_model_from_outcomes(
+                base, episodes, path=os.path.join(directory, "tuned.dodl"), seed=5
+            )
+            after = self.model_module._network_from_model(tuned).probabilities(inputs)
+            restored = self.model_module.load_model_file(os.path.join(directory, "tuned.dodl"))
+            self.assertEqual(list(restored["network"]["weights2"]), list(tuned["network"]["weights2"]))
+        self.assertEqual(list(base["network"]["weights2"]), before_weights)
+        self.assertGreater(after[labels.index("explore")], before[labels.index("explore")])
+        self.assertLess(after[labels.index("observe")], before[labels.index("observe")])
+        self.assertEqual(tuned["network"]["trainingMethod"], "outcome-policy-gradient-v1")
+        self.assertEqual(report["episodes"], 40)
+        with self.assertRaisesRegex(ValueError, "No usable"):
+            self.model_module.train_action_model_from_outcomes(base, [{"action": "explore"}])
+        with self.assertRaisesRegex(ValueError, "trained action policy"):
+            self.model_module.train_action_model_from_outcomes(self.model_module.create_model(), episodes)
+
+    def test_action_training_generalizes_to_held_out_scenarios(self):
+        with tempfile.TemporaryDirectory(prefix="action-accuracy-tests-") as directory:
+            model = self.model_module.train_action_model(
+                os.path.join(directory, "model.dodl"), sample_count=1200, epochs=12, seed=123
+            )
+        held_out = self.model_module.evaluate_action_model(model)["held_out"]
+        self.assertGreaterEqual(held_out["accuracy"], 0.9)
 
     def test_ai_engine_does_not_update_untrained_network(self):
         engine = self.model_module.AIEngine()
@@ -522,7 +706,7 @@ class ModelFileTests(unittest.TestCase):
             self.model_module.evaluate_action_scenarios(model, [scenario])
 
     def test_scenario_trajectory_objectives_check_initial_and_intermediate_state(self):
-        model = self.model_module.create_model()
+        model = self.model_module.create_model(seed=2)
         model["network"]["policyTrained"] = True
         scenario = {"initial_state": {"energy": 20}, "inputs": [None, None],
                     "objectives": {"energy": {"min": 20}},
