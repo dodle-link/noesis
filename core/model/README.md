@@ -44,13 +44,17 @@ This writes `noe-model.dodl` and `noe-model.F32.gguf` in the current directory, 
 
 ## How it works
 
-Each step reads the input and current state, chooses an action, and updates the model. Rules and eligible goals can take priority over a trained policy. An untrained model uses rules and behavior instead. Steps update memory, rules, and the outcome self-model, but do not train network weights online.
+When you call `step()`, the agent:
 
-The engine records a workspace snapshot with the decision, predictions, and outcome. Memory recall uses word overlap, not semantic understanding. When a goal is unmet, observed action effects can help guide the choice; explicit non-`observe` rules still take priority. Uncertainty values are heuristics, not calibrated probabilities, and provider analysis does not control actions.
+1. Reads the input and its current state.
+2. Chooses an action using its rules, goals, and, if trained, its action policy. Rules and eligible goals can take priority over the policy. Without a trained policy, it uses rules and behavior.
+3. Updates its state, memory, rules, and record of action outcomes. It does not train network weights during a step.
 
-Each step also records `workspace.presentSelf`, an observational snapshot inspired by Present Self Theory. `here` contains the current input (not an inferred physical location); `now` contains the observation timestamp in milliseconds and the step cycle; and `self` contains the pre-action state, previous action, and current simulated bio signals. It is also included in the workspace broadcast and persists when the model is exported. It does not change action selection.
+The agent keeps a workspace snapshot of what it decided, predicted, and observed. Memory recall looks for overlapping words, not meaning. When a goal is unmet, past action effects can help guide the next choice, though explicit non-`observe` rules still take priority. Uncertainty values are rough estimates, not calibrated probabilities; provider analysis does not choose actions.
 
-These are software traces, not biological measurements or evidence of subjective experience. The model does not simulate quantum effects or establish consciousness.
+Each snapshot also includes `workspace.presentSelf`, inspired by Present Self Theory. It records the current input as `here`, the timestamp and step cycle as `now`, and the pre-action state, previous action, and simulated bio signals as `self`. It's included in workspace broadcasts and saved with the model, but doesn't affect which action is chosen. `here` is the input, not a physical location.
+
+These records are software traces, not biological measurements or evidence of subjective experience. The model doesn't simulate quantum effects or establish consciousness.
 
 ## Training
 
