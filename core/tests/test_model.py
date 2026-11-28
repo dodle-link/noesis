@@ -66,6 +66,22 @@ class ModelFileTests(unittest.TestCase):
             ranking.add({"input": {"value": text}})
         self.assertEqual(ranking.recall({"value": "common rare"})[0]["episode"]["id"], ranking.items[0]["id"])
 
+    def test_memory_evaluation_measures_irrelevant_matches(self):
+        memory = self.model_module.MemoryStore()
+        memory.add({"input": {"value": "billing question"}})
+        metrics = self.model_module.evaluate_memory_retrieval(memory, [
+            {"input": {"value": "billing unrelated"}, "relevant_ids": []},
+            {"input": {"value": "missing"}, "relevant_ids": []},
+            {"input": {"value": "payment issue"}, "relevant_ids": [memory.items[0]["id"]]},
+        ])
+        self.assertEqual(metrics["false_positive_rate"], 0.5)
+        self.assertEqual(metrics["negative_queries"], 2)
+        self.assertEqual(metrics["positive_queries"], 1)
+        self.assertEqual(metrics["recall"], 0)
+        negative_only = self.model_module.evaluate_memory_retrieval(memory, [{"input": None, "relevant_ids": []}])
+        self.assertIsNone(negative_only["recall"])
+        self.assertIsNone(negative_only["mrr"])
+
     def test_safety_rules_precede_and_are_not_adapted(self):
         model = self.model_module.create_model()
         safety = model["rules"][0]
@@ -83,6 +99,18 @@ class ModelFileTests(unittest.TestCase):
         safety["enabled"] = False
         with self.assertRaisesRegex(ValueError, "invalid rule"):
             self.model_module.validate_model(model)
+
+    def test_safety_rule_wins_over_conflicting_goals_and_rules_across_steps(self):
+        model = self.model_module.create_model()
+        model["state"].update({"energy": 19, "curiosity": 90, "confidence": 10})
+        model["network"]["policyTrained"] = True
+        engine = self.model_module.AIEngine(model)
+        results = [engine.step(None) for _ in range(4)]
+        self.assertEqual([result["action"]["type"] for result in results],
+                         ["rest", "explore", "explore", "rest"])
+        self.assertEqual([result["workspace"]["decisionSource"] for result in results],
+                         ["safety_rule", "rule", "rule", "safety_rule"])
+        self.assertEqual([result["state"]["energy"] for result in results], [29, 21, 13, 23])
 
     def test_gguf_tensor_layout_reproduces_network_output(self):
         model = self.model_module.create_model()
@@ -332,6 +360,10 @@ class ModelFileTests(unittest.TestCase):
             invalid["objectives"]["confidence"]["min"] = 90
             with self.assertRaisesRegex(ValueError, "does not satisfy"):
                 self.model_module.train_action_model_from_episodes(path, [invalid], validation)
+            same_scenario = self.model_module.copy.deepcopy(training[0])
+            same_scenario["trajectory_objectives"] = {"energy": {"min": 20}}
+            with self.assertRaisesRegex(ValueError, "scenarios must be distinct"):
+                self.model_module.train_action_model_from_episodes(path, training, [same_scenario])
             invalid = episode(10, "override")
             with self.assertRaisesRegex(ValueError, "conflicts with a rule"):
                 self.model_module.train_action_model_from_episodes(path, [invalid], validation)
@@ -371,6 +403,68 @@ class ModelFileTests(unittest.TestCase):
             self.model_module.evaluate_task_outcomes(records + [records[0]])
         with self.assertRaisesRegex(ValueError, "boolean"):
             self.model_module.evaluate_task_outcomes([{"task_id": "a", "method": "policy", "success": 1}])
+
+    def test_task_outcomes_report_optional_paired_cost_and_latency(self):
+        records = [
+            {"task_id": "a", "method": "policy", "success": True, "latency_seconds": 2.0, "cost_usd": 0.03},
+            {"task_id": "a", "method": "rule_baseline", "success": False, "latency_seconds": 1.0, "cost_usd": 0.01},
+            {"task_id": "b", "method": "policy", "success": True, "latency_seconds": 4.0},
+        ]
+        result = self.model_module.evaluate_task_outcomes(records)
+        self.assertEqual(result["methods"]["policy"]["mean_latency_seconds"], 3.0)
+        self.assertEqual(result["methods"]["policy"]["latency_seconds_count"], 2)
+        self.assertEqual(result["vs_rule_baseline"]["policy"]["mean_latency_seconds_difference"], 1.0)
+        self.assertAlmostEqual(result["vs_rule_baseline"]["policy"]["mean_cost_usd_difference"], 0.02)
+        with self.assertRaisesRegex(ValueError, "cost_usd"):
+            self.model_module.evaluate_task_outcomes([{**records[0], "cost_usd": float("nan")}])
+
+    def test_demonstrations_reject_trajectory_violations(self):
+        episode = {"initial_state": {"energy": 22}, "inputs": [None, None],
+                   "actions": ["learn", "rest"], "objectives": {"energy": {"min": 20}},
+                   "trajectory_objectives": {"energy": {"min": 20}}}
+        validation = self.model_module.copy.deepcopy(episode)
+        validation["initial_state"]["energy"] = 23
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "trajectory objectives"):
+                self.model_module.train_action_model_from_episodes(
+                    os.path.join(directory, "model.dodl"), [episode], [validation], epochs=1)
+
+    def test_json_cli_trains_and_evaluates_caller_data(self):
+        script = self.model_module.__file__
+        def episode(energy, text, group):
+            return {"group": group, "initial_state": {"energy": energy},
+                    "inputs": [{"value": text}], "actions": ["learn"],
+                    "objectives": {"confidence": {"min": 55}},
+                    "trajectory_objectives": {"energy": {"min": 20}}}
+
+        with tempfile.TemporaryDirectory() as directory:
+            dataset_path = os.path.join(directory, "dataset.json")
+            model_path = os.path.join(directory, "model.dodl")
+            training = episode(80, "training", "train")
+            validation = episode(75, "validation", "validation")
+            with open(dataset_path, "w", encoding="utf-8") as dataset:
+                json.dump({"training": [training], "validation": [validation]}, dataset)
+            result = subprocess.run([sys.executable, script, "--train-demonstrations", dataset_path,
+                                     "--output", model_path, "--epochs", "1", "--seed", "7"],
+                                    capture_output=True, text=True, check=True)
+            self.assertIn("validation", json.loads(result.stdout))
+            scenario = episode(70, "test", "test")
+            del scenario["actions"]
+            with open(dataset_path, "w", encoding="utf-8") as dataset:
+                json.dump([scenario], dataset)
+            result = subprocess.run([sys.executable, script, "--evaluate-scenarios", dataset_path,
+                                     "--model", model_path], capture_output=True, text=True, check=True)
+            self.assertIn("trajectory_success_rate", json.loads(result.stdout)["policy"])
+            with open(dataset_path, "w", encoding="utf-8") as dataset:
+                json.dump([{"task_id": "a", "method": "policy", "success": True}], dataset)
+            result = subprocess.run([sys.executable, script, "--evaluate-outcomes", dataset_path],
+                                    capture_output=True, text=True, check=True)
+            self.assertEqual(json.loads(result.stdout)["methods"]["policy"]["success_rate"], 1)
+            with open(dataset_path, "w", encoding="utf-8") as dataset:
+                json.dump([{"input": {"value": "unknown"}, "relevant_ids": []}], dataset)
+            result = subprocess.run([sys.executable, script, "--evaluate-memory", dataset_path,
+                                     "--model", model_path], capture_output=True, text=True, check=True)
+            self.assertEqual(json.loads(result.stdout)["false_positive_rate"], 0)
 
     def test_scenario_evaluation_compares_multi_step_outcomes_and_overrides(self):
         model = self.model_module.create_model()
@@ -425,6 +519,23 @@ class ModelFileTests(unittest.TestCase):
         self.assertEqual(results["policy"]["scenarios"][0]["labeled_actions"], 1)
         scenario["expected_actions"] = ["rest"]
         with self.assertRaisesRegex(ValueError, "expected_actions"):
+            self.model_module.evaluate_action_scenarios(model, [scenario])
+
+    def test_scenario_trajectory_objectives_check_initial_and_intermediate_state(self):
+        model = self.model_module.create_model()
+        model["network"]["policyTrained"] = True
+        scenario = {"initial_state": {"energy": 20}, "inputs": [None, None],
+                    "objectives": {"energy": {"min": 20}},
+                    "trajectory_objectives": {"energy": {"min": 20}}}
+        results = self.model_module.evaluate_action_scenarios(model, [scenario])
+        for result in results.values():
+            self.assertTrue(result["scenarios"][0]["success"])
+            self.assertFalse(result["scenarios"][0]["trajectory_success"])
+            self.assertEqual(result["trajectory_success_rate"], 0)
+        scenario["initial_state"]["energy"] = 19
+        self.assertFalse(self.model_module.evaluate_action_scenarios(model, [scenario])["policy"]["scenarios"][0]["trajectory_success"])
+        scenario["trajectory_objectives"] = {"energy": {"min": 30, "max": 20}}
+        with self.assertRaisesRegex(ValueError, "min cannot exceed max"):
             self.model_module.evaluate_action_scenarios(model, [scenario])
 
     def test_demonstration_groups_cannot_overlap(self):

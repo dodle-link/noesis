@@ -97,6 +97,8 @@ print(results["policy"]["action_accuracy"], results["policy"]["decision_source_c
 
 Objectives support `min` and `max` bounds on final `energy`, `curiosity`, `confidence`, and `stability`. Results include success rates, mean total reward, mean prediction error, and each scenario's actions, decision sources, minimum energy, final state, and success. `decision_source_counts` and `override_rate` show how often a rule, goal, or prediction selected an action instead of the policy. For independently labeled decisions, add `expected_actions` to a scenario: one action name or `None` per input. `action_accuracy` is the fraction of labeled actions matched, or `None` when no labels were supplied. Labels should be chosen independently of the model and its training data.
 
+Add `trajectory_objectives` with the same bounds to check the initial state and every post-step state. `trajectory_success` and `trajectory_success_rate` report these bounds separately from final-state success; the rate covers only scenarios with trajectory objectives and is `None` when none are supplied. For example, `"trajectory_objectives": {"energy": {"min": 20}}` detects a temporary energy drop even if the final energy recovers. The default rest rule triggers only below 20 and does not guarantee this bound.
+
 The evaluator copies the model for each run. Its state objectives, rewards, and action labels measure this simulation only; they do not measure actual user outcomes. Build held-out scenarios from intended use cases, with independently defined success criteria and task or source groups. The engine's four actions do not themselves perform external tasks, so an end-to-end usefulness benchmark also needs evaluation of the surrounding application and its real outcomes.
 
 ### Train from task demonstrations
@@ -129,6 +131,8 @@ print(report["test_scenarios"]["prediction"]["success_rate"])
 
 This example is intentionally small and synthetic; it does not establish generalization. Supply larger, representative demonstrations and independently designed validation and held-out tasks, including conflicting goals. To prevent source or task leakage, add a non-empty `group` string to every training episode, validation episode, and test scenario. Groups may repeat within a split but must be disjoint across splits. Grouping is optional for compatibility; the caller must select meaningful group identities. The trainer also rejects exact duplicate scenarios across the sets, but cannot detect subtler leakage.
 
+Demonstrations may also specify `trajectory_objectives`; the trainer rejects a demonstration if its initial state or any post-step state violates them. This is a training-data check, not a guarantee about a trained policy.
+
 Demonstration policies use the `action-context-v2` feature schema: state, compact text features, the active goal's state deficits, and relevance scores for recalled actions. Existing `action-state-text-v1` models retain their original encoding. Neither schema represents the full workspace; the runtime handles workspace-based planning separately. When test scenarios are supplied, `report["test_comparison"]` summarizes each policy's success-rate difference from the rule baseline and its override rate. This comparison still measures only the simulation.
 
 ### Evaluate application outcomes
@@ -147,6 +151,8 @@ print(results["methods"], results["vs_rule_baseline"])
 
 The report includes each method's task count and success rate, plus the paired task count and success-rate difference against `rule_baseline`. Unpaired tasks contribute to their method's overall rate but not the paired comparison. These summaries do not establish statistical significance or eliminate bias; collect enough independently labeled results before deciding whether to deploy a trained policy.
 
+Records can also include measured non-negative `latency_seconds` and `cost_usd`. Each method reports the mean and count for available measurements. Comparisons report mean differences and counts only for task pairs with measurements for both methods. Costs must be supplied by the caller; the engine does not estimate provider pricing.
+
 ### Evaluate memory retrieval
 
 Use representative queries and independently labeled relevant episode IDs to measure retrieval before changing its ranking or adding semantic search:
@@ -164,6 +170,23 @@ print(results["recall"], results["mrr"])
 ```
 
 The report gives mean recall at `count` and mean reciprocal rank. The example only illustrates the API; use held-out queries including paraphrases and irrelevant overlaps to assess retrieval quality.
+
+Use an empty `relevant_ids` list for a query that should match no episodes. `false_positive_rate` is the fraction of those queries that return any match. Recall and MRR cover only queries with relevant IDs and are `None` when there are none; the false-positive rate is `None` when there are no no-match queries.
+
+### JSON workflows
+
+The command line can train and evaluate using independently prepared JSON files:
+
+```bash
+python3 me.py --train-demonstrations demonstrations.json --output trained.dodl --epochs 20 --seed 7
+python3 me.py --evaluate-scenarios scenarios.json --model trained.dodl
+python3 me.py --evaluate-outcomes outcomes.json
+python3 me.py --evaluate-memory queries.json --model trained.dodl
+```
+
+The demonstrations file is an object containing `training` and `validation` episode lists and an optional `test_scenarios` list, using the episode format above. The other files are JSON lists matching the corresponding API examples. Memory query IDs must refer to episodes in the supplied model. Reports are printed as JSON; training also writes the requested DODL file and its matching GGUF file, replacing existing files at those paths.
+
+Collect task outcomes from the surrounding application and assess them independently. A synthetic scenario or a successful local action is not a real task outcome. Split demonstrations by source or task, reserve separate held-out tasks, and compare the methods on paired tasks before deciding whether to use the trained policy.
 
 ### Safety rules
 
@@ -235,6 +258,8 @@ with open("my-model.dodl", "wb") as model_file:
 ```
 
 The provider writes the reply and may return a short analysis. The local engine still chooses and runs the action. `respond()` updates the engine just like `step()`, so export the model if you want to keep the new state. Load `my-model.dodl` in a later run to continue from it. Provider request failures raise `LLMProviderError`.
+
+The returned action describes a local simulation step, not permission to perform an external operation. Application code must independently authenticate, authorize, validate, and, where required, obtain approval for external operations; provider analysis and local decision traces are not authorization.
 
 By default, `respond()` sends the current input and the numeric energy, curiosity, confidence, and stability signals, but no stored memory or workspace. The current input can itself contain sensitive information. To redact it or explicitly include selected context, pass a trusted `context_filter` callable. It receives copies of `user_input`, full `state` (including the pre-action workspace), and recalled `memories`, and must return a dictionary with exactly those three keys:
 

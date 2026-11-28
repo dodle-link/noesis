@@ -700,9 +700,12 @@ def evaluate_memory_retrieval(memory, queries, count=3):
         raise ValueError("queries must be a non-empty list.")
     recall = 0.0
     reciprocal_rank = 0.0
+    positive_queries = 0
+    negative_queries = 0
+    false_positives = 0
     for query in queries:
-        if not isinstance(query, dict) or not isinstance(query.get("relevant_ids"), list) or not query["relevant_ids"]:
-            raise ValueError("Each query must have a non-empty relevant_ids list.")
+        if not isinstance(query, dict) or not isinstance(query.get("relevant_ids"), list):
+            raise ValueError("Each query must have a relevant_ids list.")
         relevant = query["relevant_ids"]
         if any(not isinstance(identifier, str) or not identifier for identifier in relevant) or len(set(relevant)) != len(relevant):
             raise ValueError("Relevant IDs must be distinct non-empty strings.")
@@ -710,9 +713,18 @@ def evaluate_memory_retrieval(memory, queries, count=3):
         if not set(relevant) <= known_ids:
             raise ValueError("Relevant IDs must exist in memory.")
         found = [match["episode"]["id"] for match in memory.recall(query.get("input"), count)]
+        if not relevant:
+            negative_queries += 1
+            false_positives += bool(found)
+            continue
+        positive_queries += 1
         recall += len(set(found) & set(relevant)) / len(relevant)
         reciprocal_rank += next((1 / rank for rank, identifier in enumerate(found, 1) if identifier in relevant), 0)
-    return {"queries": len(queries), "count": count, "recall": recall / len(queries), "mrr": reciprocal_rank / len(queries)}
+    return {"queries": len(queries), "count": count,
+            "recall": recall / positive_queries if positive_queries else None,
+            "mrr": reciprocal_rank / positive_queries if positive_queries else None,
+            "positive_queries": positive_queries, "negative_queries": negative_queries,
+            "false_positive_rate": false_positives / negative_queries if negative_queries else None}
 
 
 def _js_number(value):
@@ -1580,11 +1592,24 @@ def evaluate_task_outcomes(records):
         tasks = methods.setdefault(method, {})
         if task_id in tasks:
             raise ValueError("Each method and task_id pair must be unique.")
-        tasks[task_id] = success
+        measurements = {}
+        for key in ("latency_seconds", "cost_usd"):
+            if key in record:
+                value = record[key]
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+                    raise ValueError(f"{key} must be a non-negative finite number.")
+                measurements[key] = value
+        tasks[task_id] = {"success": success, **measurements}
     summaries = {
-        method: {"tasks": len(tasks), "success_rate": sum(tasks.values()) / len(tasks)}
+        method: {"tasks": len(tasks), "success_rate": sum(task["success"] for task in tasks.values()) / len(tasks)}
         for method, tasks in methods.items()
     }
+    for method, tasks in methods.items():
+        for key in ("latency_seconds", "cost_usd"):
+            values = [task[key] for task in tasks.values() if key in task]
+            if values:
+                summaries[method][f"mean_{key}"] = sum(values) / len(values)
+                summaries[method][f"{key}_count"] = len(values)
     comparisons = {}
     if "rule_baseline" in methods:
         baseline = methods["rule_baseline"]
@@ -1594,8 +1619,13 @@ def evaluate_task_outcomes(records):
             shared = tasks.keys() & baseline.keys()
             comparisons[method] = {
                 "paired_tasks": len(shared),
-                "success_rate_difference": (sum(int(tasks[task]) - int(baseline[task]) for task in shared) / len(shared)) if shared else None,
+                "success_rate_difference": (sum(int(tasks[task]["success"]) - int(baseline[task]["success"]) for task in shared) / len(shared)) if shared else None,
             }
+            for key in ("latency_seconds", "cost_usd"):
+                measured = [task for task in shared if key in tasks[task] and key in baseline[task]]
+                if measured:
+                    comparisons[method][f"paired_{key}_count"] = len(measured)
+                    comparisons[method][f"mean_{key}_difference"] = sum(tasks[task][key] - baseline[task][key] for task in measured) / len(measured)
     return {"methods": summaries, "vs_rule_baseline": comparisons}
 
 
@@ -1627,6 +1657,7 @@ def evaluate_action_scenarios(model, scenarios):
         initial = scenario.get("initial_state", {})
         inputs = scenario.get("inputs")
         objectives = scenario.get("objectives")
+        trajectory_objectives = scenario.get("trajectory_objectives")
         expected_actions = scenario.get("expected_actions")
         if not isinstance(initial, dict) or any(key not in state_keys for key in initial):
             raise ValueError("initial_state must contain only supported state values.")
@@ -1642,14 +1673,24 @@ def evaluate_action_scenarios(model, scenarios):
         for key, value in initial.items():
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 100:
                 raise ValueError(f"Invalid initial state value for {key}.")
-        for key, bounds in objectives.items():
-            if key not in state_keys or not isinstance(bounds, dict) or not bounds or any(bound not in ("min", "max") for bound in bounds):
-                raise ValueError("Objectives must specify min or max for supported state values.")
-            for value in bounds.values():
-                if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 100:
-                    raise ValueError("Objective bounds must be finite values between 0 and 100.")
-            if "min" in bounds and "max" in bounds and bounds["min"] > bounds["max"]:
-                raise ValueError("Objective min cannot exceed max.")
+        if trajectory_objectives is not None and (not isinstance(trajectory_objectives, dict) or not trajectory_objectives):
+            raise ValueError("trajectory_objectives must be a non-empty object.")
+        for objective_set in (objectives, trajectory_objectives or {}):
+            for key, bounds in objective_set.items():
+                if key not in state_keys or not isinstance(bounds, dict) or not bounds or any(bound not in ("min", "max") for bound in bounds):
+                    raise ValueError("Objectives must specify min or max for supported state values.")
+                for value in bounds.values():
+                    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 100:
+                        raise ValueError("Objective bounds must be finite values between 0 and 100.")
+                if "min" in bounds and "max" in bounds and bounds["min"] > bounds["max"]:
+                    raise ValueError("Objective min cannot exceed max.")
+
+        def satisfies(state, bounds_by_key):
+            return all(
+                ("min" not in bounds or state[key] >= bounds["min"])
+                and ("max" not in bounds or state[key] <= bounds["max"])
+                for key, bounds in bounds_by_key.items()
+            )
 
         scenario_model = copy.deepcopy(model)
         if "goals" in scenario:
@@ -1663,6 +1704,7 @@ def evaluate_action_scenarios(model, scenarios):
             total_reward = 0.0
             prediction_error = 0.0
             minimum_energy = engine.state["energy"]
+            trajectory_success = satisfies(engine.state, trajectory_objectives) if trajectory_objectives is not None else None
             for input_value in inputs:
                 result = engine.step(copy.deepcopy(input_value))
                 actions.append(result["action"]["type"])
@@ -1670,12 +1712,10 @@ def evaluate_action_scenarios(model, scenarios):
                 total_reward += result["evaluation"]["reward"]
                 prediction_error += result["prediction"]["absoluteError"]
                 minimum_energy = min(minimum_energy, result["state"]["energy"])
+                if trajectory_objectives is not None:
+                    trajectory_success = trajectory_success and satisfies(engine.state, trajectory_objectives)
             final_state = {key: engine.state[key] for key in state_keys}
-            succeeded = all(
-                ("min" not in bounds or final_state[key] >= bounds["min"])
-                and ("max" not in bounds or final_state[key] <= bounds["max"])
-                for key, bounds in objectives.items()
-            )
+            succeeded = satisfies(final_state, objectives)
             runs[label].append({
                 "actions": actions,
                 "decision_sources": sources,
@@ -1686,10 +1726,12 @@ def evaluate_action_scenarios(model, scenarios):
                 "minimum_energy": minimum_energy,
                 "final_state": final_state,
                 "success": succeeded,
+                "trajectory_success": trajectory_success,
             })
     return {
         label: {
             "success_rate": sum(run["success"] for run in results) / len(results),
+            "trajectory_success_rate": (sum(run["trajectory_success"] for run in results if run["trajectory_success"] is not None) / sum(run["trajectory_success"] is not None for run in results)) if any(run["trajectory_success"] is not None for run in results) else None,
             "mean_total_reward": sum(run["total_reward"] for run in results) / len(results),
             "mean_prediction_error": sum(run["mean_prediction_error"] for run in results) / len(results),
             "decision_source_counts": {
@@ -1773,17 +1815,24 @@ def train_action_model_from_episodes(path, training_episodes, validation_episode
                 raise ValueError("Episode inputs and actions must be non-empty lists of equal length.")
             if any(action not in ACTION_LABELS for action in actions):
                 raise ValueError("Episode contains an unsupported action.")
-            scenario = {key: episode[key] for key in ("initial_state", "inputs", "objectives", "goals") if key in episode}
+            scenario = {key: episode[key] for key in ("initial_state", "inputs", "objectives", "trajectory_objectives", "goals") if key in episode}
             evaluate_action_scenarios(template, [scenario])
             model = copy.deepcopy(template)
             if "goals" in episode:
                 model["goals"] = copy.deepcopy(episode["goals"])
             engine = DemonstrationEngine(model)
             engine.state.update(episode.get("initial_state", {}))
+            def validate_trajectory():
+                for key, bounds in (episode.get("trajectory_objectives") or {}).items():
+                    if ("min" in bounds and engine.state[key] < bounds["min"]) or ("max" in bounds and engine.state[key] > bounds["max"]):
+                        raise ValueError("Demonstration does not satisfy its trajectory objectives.")
+
+            validate_trajectory()
             for input_value, action in zip(inputs, actions):
                 examples.append((engine.encode_input(input_value), action))
                 engine.demonstrated_action = action
                 engine.step(copy.deepcopy(input_value))
+                validate_trajectory()
             for key, bounds in episode["objectives"].items():
                 if ("min" in bounds and engine.state[key] < bounds["min"]) or ("max" in bounds and engine.state[key] > bounds["max"]):
                     raise ValueError("Demonstration does not satisfy its final-state objectives.")
@@ -1844,15 +1893,43 @@ if __name__ == "__main__":
         action="store_true",
         help="Train an action-selection model and write noe-action-model.dodl.",
     )
+    training_modes.add_argument("--train-demonstrations", metavar="JSON", help="Train from demonstration splits in a JSON file.")
+    training_modes.add_argument("--evaluate-scenarios", metavar="JSON", help="Evaluate scenario objects from a JSON file.")
+    training_modes.add_argument("--evaluate-outcomes", metavar="JSON", help="Evaluate application outcome records from a JSON file.")
+    training_modes.add_argument("--evaluate-memory", metavar="JSON", help="Evaluate retrieval queries from a JSON file.")
     parser.add_argument("--samples", type=int, default=1200)
     parser.add_argument("--epochs", type=int, default=12)
     parser.add_argument("--patience", type=int, default=4)
     parser.add_argument("--seed", type=int)
     parser.add_argument("--output")
+    parser.add_argument("--model", default="noe-model.dodl", help="Model file for scenario or memory evaluation.")
     arguments = parser.parse_args()
 
     output_path = "noe-model.dodl"
-    if arguments.train_actions:
+    if arguments.train_demonstrations:
+        with open(arguments.train_demonstrations, encoding="utf-8") as source:
+            dataset = json.load(source)
+        if not isinstance(dataset, dict) or set(dataset) - {"training", "validation", "test_scenarios"} or not {"training", "validation"} <= set(dataset):
+            parser.error("demonstrations JSON requires training and validation lists and optional test_scenarios")
+        output_path = arguments.output or "noe-demonstration-model.dodl"
+        _, report = train_action_model_from_episodes(
+            output_path, dataset["training"], dataset["validation"],
+            test_scenarios=dataset.get("test_scenarios"), epochs=arguments.epochs,
+            seed=arguments.seed if arguments.seed is not None else 1,
+        )
+        print(json.dumps(report, indent=2, allow_nan=False))
+    elif arguments.evaluate_scenarios or arguments.evaluate_outcomes or arguments.evaluate_memory:
+        dataset_path = arguments.evaluate_scenarios or arguments.evaluate_outcomes or arguments.evaluate_memory
+        with open(dataset_path, encoding="utf-8") as source:
+            dataset = json.load(source)
+        if arguments.evaluate_scenarios:
+            report = evaluate_action_scenarios(arguments.model, dataset)
+        elif arguments.evaluate_outcomes:
+            report = evaluate_task_outcomes(dataset)
+        else:
+            report = evaluate_memory_retrieval(MemoryStore(load_model_file(arguments.model)["memory"]), dataset)
+        print(json.dumps(report, indent=2, allow_nan=False))
+    elif arguments.train_actions:
         output_path = arguments.output or "noe-action-model.dodl"
 
         def report_action_metrics(epoch, metrics):
