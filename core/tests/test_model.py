@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.error
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -44,6 +45,26 @@ class ModelFileTests(unittest.TestCase):
         matches = memory.recall({"value": "hello world"})
         self.assertEqual(len(matches), 1)
         self.assertEqual(matches[0]["relevance"], 1.0)
+
+    def test_memory_recall_weights_rare_terms_and_evaluates_labeled_queries(self):
+        memory = self.model_module.MemoryStore()
+        for text in ("common rare", "common other", "common unrelated", "common"):
+            memory.add({"input": {"value": text}, "action": "observe"})
+        relevant_id = memory.items[0]["id"]
+        matches = memory.recall({"value": "common rare"})
+        self.assertEqual(matches[0]["episode"]["id"], relevant_id)
+        metrics = self.model_module.evaluate_memory_retrieval(memory, [
+            {"input": {"value": "common rare"}, "relevant_ids": [relevant_id]},
+            {"input": {"value": "missing"}, "relevant_ids": [relevant_id]},
+        ], count=1)
+        self.assertEqual(metrics["recall"], 0.5)
+        self.assertEqual(metrics["mrr"], 0.5)
+        with self.assertRaisesRegex(ValueError, "exist"):
+            self.model_module.evaluate_memory_retrieval(memory, [{"relevant_ids": ["missing"]}])
+        ranking = self.model_module.MemoryStore()
+        for text in ("rare", "common other", "common unrelated", "common"):
+            ranking.add({"input": {"value": text}})
+        self.assertEqual(ranking.recall({"value": "common rare"})[0]["episode"]["id"], ranking.items[0]["id"])
 
     def test_safety_rules_precede_and_are_not_adapted(self):
         model = self.model_module.create_model()
@@ -301,6 +322,8 @@ class ModelFileTests(unittest.TestCase):
             self.assertTrue(model["network"]["policyTrained"])
             self.assertEqual(set(report["test_scenarios"]), {"prediction", "policy", "rule_baseline"})
             self.assertIn("mean_prediction_error", report["test_scenarios"]["prediction"])
+            self.assertEqual(report["test_comparison"]["policy"]["scenarios"], 1)
+            self.assertEqual(report["test_comparison"]["policy"]["override_rate"], report["test_scenarios"]["policy"]["override_rate"])
             with self.assertRaisesRegex(ValueError, "distinct"):
                 self.model_module.train_action_model_from_episodes(path, training, training)
             with self.assertRaisesRegex(ValueError, "Test scenarios must be distinct"):
@@ -333,6 +356,21 @@ class ModelFileTests(unittest.TestCase):
 
         self.assertEqual(learned["action"]["type"], "learn")
         self.assertEqual(overridden["action"]["type"], "rest")
+
+    def test_task_outcomes_compare_paired_independent_results(self):
+        records = [
+            {"task_id": "a", "method": "policy", "success": True},
+            {"task_id": "a", "method": "rule_baseline", "success": False},
+            {"task_id": "b", "method": "policy", "success": False},
+            {"task_id": "unpaired", "method": "rule_baseline", "success": True},
+        ]
+        result = self.model_module.evaluate_task_outcomes(records)
+        self.assertEqual(result["methods"]["policy"], {"tasks": 2, "success_rate": 0.5})
+        self.assertEqual(result["vs_rule_baseline"]["policy"], {"paired_tasks": 1, "success_rate_difference": 1.0})
+        with self.assertRaisesRegex(ValueError, "unique"):
+            self.model_module.evaluate_task_outcomes(records + [records[0]])
+        with self.assertRaisesRegex(ValueError, "boolean"):
+            self.model_module.evaluate_task_outcomes([{"task_id": "a", "method": "policy", "success": 1}])
 
     def test_scenario_evaluation_compares_multi_step_outcomes_and_overrides(self):
         model = self.model_module.create_model()
@@ -794,6 +832,30 @@ console.log(JSON.stringify(Array.from(output)));
                         "openai-compatible", timeout=timeout
                     )
 
+    def test_llm_retries_are_opt_in_bounded_and_respect_retry_after(self):
+        for retries in (-1, 3, True, 1.5):
+            with self.assertRaisesRegex(ValueError, "max_retries"):
+                self.model_module.LLMProvider("openai-compatible", max_retries=retries)
+        response = io.BytesIO(json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode())
+        transient = self.model_module.LLMProvider("openai-compatible", max_retries=1)
+        error = urllib.error.HTTPError("http://localhost", 429, "private", {"Retry-After": "1"}, None)
+        with patch("urllib.request.urlopen", side_effect=[error, response]) as urlopen, patch("model_providers.time.sleep") as sleep:
+            self.assertEqual(transient.generate("hello", {}, []), "ok")
+            self.assertEqual(urlopen.call_count, 2)
+            sleep.assert_called_once_with(1.0)
+        for status, headers in ((400, {}), (503, {"Retry-After": "10"}), (429, {"Retry-After": "invalid"}), (429, {"Retry-After": "nan"}), (429, {"Retry-After": "-1"})):
+            error = urllib.error.HTTPError("http://localhost", status, "private", headers, None)
+            with patch("urllib.request.urlopen", side_effect=error) as urlopen, patch("model_providers.time.sleep") as sleep:
+                with self.assertRaises(self.model_module.LLMProviderError):
+                    transient.generate("hello", {}, [])
+                self.assertEqual(urlopen.call_count, 1)
+                sleep.assert_not_called()
+        error = urllib.error.HTTPError("http://localhost", 429, "private", {}, None)
+        with patch("urllib.request.urlopen", side_effect=error) as urlopen:
+            with self.assertRaises(self.model_module.LLMProviderError):
+                self.model_module.LLMProvider("openai-compatible").generate("hello", {}, [])
+            self.assertEqual(urlopen.call_count, 1)
+
     def test_llm_provider_bounds_and_validates_http_payloads(self):
         provider = self.model_module.LLMProvider(
             "openai-compatible", base_url="http://localhost:11434/v1"
@@ -1233,6 +1295,62 @@ console.log(JSON.stringify(Array.from(output)));
         self.assertEqual(result["reply"], "Hello from provider")
         self.assertEqual(engine.get_state()["cycle"], 1)
         self.assertEqual(provider.context[0]["value"], "hello")
+        self.assertEqual(set(provider.context[1]), {"energy", "curiosity", "confidence", "stability"})
+        self.assertEqual(provider.context[2], [])
+
+    def test_engine_events_exclude_context_and_report_failures(self):
+        events = []
+
+        class FakeProvider:
+            def generate(self, user_input, state, memories):
+                if user_input["value"] == "fail secret":
+                    raise RuntimeError("secret error")
+                return "private reply"
+
+        engine = self.model_module.AIEngine(provider=FakeProvider(), event_callback=events.append)
+        engine.respond({"type": "user_input", "value": "private input"})
+        self.assertEqual([event["event"] for event in events], ["provider", "decision"])
+        self.assertEqual(events[0]["outcome"], "success")
+        self.assertGreaterEqual(events[0]["duration_seconds"], 0)
+        self.assertTrue(events[1]["success"])
+        with self.assertRaises(RuntimeError):
+            engine.respond({"type": "user_input", "value": "fail secret"})
+        self.assertEqual(events[-1]["outcome"], "error")
+        self.assertNotIn("secret", repr(events))
+        self.assertNotIn("private", repr(events))
+        self.assertEqual(engine.state["cycle"], 1)
+
+        def broken_callback(event):
+            raise RuntimeError("metrics unavailable")
+
+        engine.event_callback = broken_callback
+        engine.step(None)
+        self.assertEqual(engine.state["cycle"], 2)
+
+    def test_provider_context_filter_can_redact_without_mutating_engine(self):
+        class FakeProvider:
+            def generate(self, user_input, state, memories):
+                self.context = (user_input, state, memories)
+                return "ok"
+
+        provider = FakeProvider()
+        engine = self.model_module.AIEngine(provider=provider)
+        engine.step({"type": "user_input", "value": "private memory"})
+        user_input = {"type": "user_input", "value": "private memory"}
+
+        def redact(context):
+            context["user_input"]["value"] = "redacted"
+            context["state"]["energy"] = 0
+            context["memories"] = []
+            return context
+
+        result = engine.respond(user_input, context_filter=redact)
+        self.assertEqual(provider.context[0]["value"], "redacted")
+        self.assertEqual(provider.context[2], [])
+        self.assertEqual(user_input["value"], "private memory")
+        self.assertNotEqual(result["state"]["energy"], 0)
+        with self.assertRaisesRegex(ValueError, "context_filter"):
+            engine.respond(user_input, context_filter=lambda context: {})
 
     def test_engine_broadcasts_provider_analysis_without_using_it_as_action(self):
         analysis = {
@@ -1354,7 +1472,7 @@ console.log(JSON.stringify(Array.from(output)));
         provider = FakeProvider()
         engine = self.model_module.AIEngine(provider=provider)
         engine.step({"type": "user_input", "value": "shared topic"})
-        result = engine.respond({"type": "user_input", "value": "shared topic"})
+        result = engine.respond({"type": "user_input", "value": "shared topic"}, context_filter=lambda context: context)
 
         matches = result["workspace"]["memories"]
         self.assertEqual(len(matches), 1)

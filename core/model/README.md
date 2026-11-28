@@ -54,9 +54,9 @@ This writes `noe-model.dodl` and `noe-model.F32.gguf` in the current directory, 
 
 Each step reads the input and current state, chooses an action, runs it, and updates the model. Rules and eligible goals can take priority. A model trained with `--train-actions` can use its network to choose among `rest`, `explore`, `learn`, and `observe`. An untrained model uses its existing rules and behavior instead. Steps update memory, rules, and the outcome self-model, but do not train network weights online.
 
-The engine records a workspace snapshot for each step. This includes the input, active goal, recalled episodes, candidate predictions, expected outcome, actual outcome, and `decisionSource`. Episodes are selected by case- and punctuation-normalized word overlap and recency, not semantic understanding.
+The engine records a workspace snapshot for each step. This includes the input, active goal, recalled episodes, candidate predictions, expected outcome, actual outcome, and `decisionSource`. Episodes are selected by case- and punctuation-normalized word overlap, with rarer query words weighted more heavily and recency used to break ties. This is lexical matching, not semantic understanding.
 
-When a goal is unmet, previously observed action effects can help guide the choice. Explicit non-`observe` rules still take priority, and unknown actions fall back to the existing policy. Uncertainty values are simple heuristics based on observation counts and word overlap, not calibrated probabilities. Reply providers receive the recalled episodes and pre-action workspace; their analysis does not control actions.
+When a goal is unmet, previously observed action effects can help guide the choice. Explicit non-`observe` rules still take priority, and unknown actions fall back to the existing policy. Uncertainty values are simple heuristics based on observation counts and word overlap, not calibrated probabilities. Provider analysis does not control actions.
 
 These are software traces and decision heuristics, not evidence of subjective experience. Values such as `novelty`, `stress`, `recovery`, and `arousal` are bounded software signals. They are not biological measurements, and the model does not simulate quantum effects or establish consciousness.
 
@@ -129,7 +129,41 @@ print(report["test_scenarios"]["prediction"]["success_rate"])
 
 This example is intentionally small and synthetic; it does not establish generalization. Supply larger, representative demonstrations and independently designed validation and held-out tasks, including conflicting goals. To prevent source or task leakage, add a non-empty `group` string to every training episode, validation episode, and test scenario. Groups may repeat within a split but must be disjoint across splits. Grouping is optional for compatibility; the caller must select meaningful group identities. The trainer also rejects exact duplicate scenarios across the sets, but cannot detect subtler leakage.
 
-Demonstration policies use the `action-context-v2` feature schema: state, compact text features, the active goal's state deficits, and relevance scores for recalled actions. Existing `action-state-text-v1` models retain their original encoding. Neither schema represents the full workspace; the runtime handles workspace-based planning separately.
+Demonstration policies use the `action-context-v2` feature schema: state, compact text features, the active goal's state deficits, and relevance scores for recalled actions. Existing `action-state-text-v1` models retain their original encoding. Neither schema represents the full workspace; the runtime handles workspace-based planning separately. When test scenarios are supplied, `report["test_comparison"]` summarizes each policy's success-rate difference from the rule baseline and its override rate. This comparison still measures only the simulation.
+
+### Evaluate application outcomes
+
+Record independently assessed outcomes from representative tasks in the surrounding application. Compare methods on equivalent tasks using the same success criteria and an evaluation design that avoids order and selection bias. `task_id` must identify the same task across methods; each method/task pair may appear once.
+
+```python
+from me import evaluate_task_outcomes
+
+results = evaluate_task_outcomes([
+    {"task_id": "task-1", "method": "policy", "success": True},
+    {"task_id": "task-1", "method": "rule_baseline", "success": False},
+])
+print(results["methods"], results["vs_rule_baseline"])
+```
+
+The report includes each method's task count and success rate, plus the paired task count and success-rate difference against `rule_baseline`. Unpaired tasks contribute to their method's overall rate but not the paired comparison. These summaries do not establish statistical significance or eliminate bias; collect enough independently labeled results before deciding whether to deploy a trained policy.
+
+### Evaluate memory retrieval
+
+Use representative queries and independently labeled relevant episode IDs to measure retrieval before changing its ranking or adding semantic search:
+
+```python
+from me import MemoryStore, evaluate_memory_retrieval
+
+memory = MemoryStore()
+memory.add({"input": {"value": "billing question"}, "action": "observe"})
+results = evaluate_memory_retrieval(memory, [{
+    "input": {"value": "billing question"},
+    "relevant_ids": [memory.items[0]["id"]],
+}], count=3)
+print(results["recall"], results["mrr"])
+```
+
+The report gives mean recall at `count` and mean reciprocal rank. The example only illustrates the API; use held-out queries including paraphrases and irrelevant overlaps to assess retrieval quality.
 
 ### Safety rules
 
@@ -201,6 +235,37 @@ with open("my-model.dodl", "wb") as model_file:
 ```
 
 The provider writes the reply and may return a short analysis. The local engine still chooses and runs the action. `respond()` updates the engine just like `step()`, so export the model if you want to keep the new state. Load `my-model.dodl` in a later run to continue from it. Provider request failures raise `LLMProviderError`.
+
+By default, `respond()` sends the current input and the numeric energy, curiosity, confidence, and stability signals, but no stored memory or workspace. The current input can itself contain sensitive information. To redact it or explicitly include selected context, pass a trusted `context_filter` callable. It receives copies of `user_input`, full `state` (including the pre-action workspace), and recalled `memories`, and must return a dictionary with exactly those three keys:
+
+```python
+def select_context(context):
+    return {
+        "user_input": {"type": "user_input", "value": "[redacted]"},
+        "state": {},
+        "memories": [],
+    }
+
+result = engine.respond({"type": "user_input", "value": "private"},
+                        LLMProvider(), context_filter=select_context)
+```
+
+This changes what the provider sees, not the input processed locally or stored in the model. The filter must redact every sensitive field it chooses to include. Calling `LLMProvider.generate()` directly sends the context supplied by its caller.
+
+Retries are disabled by default. `LLMProvider(max_retries=1)` opts into at most one retry (maximum two are allowed) for HTTP 429 or 503, with bounded backoff. Numeric `Retry-After` values up to two seconds are honored; longer, malformed, or HTTP-date values are not retried. Other HTTP failures and transport errors are not retried. Retrying generation can incur additional cost and extend total latency; the timeout applies per request.
+
+### Observability
+
+Pass an `event_callback` to `AIEngine` to receive content-free provider and local decision events:
+
+```python
+events = []
+engine = AIEngine(event_callback=events.append)
+engine.step({"type": "user_input", "value": "hello"})
+print(events[-1])
+```
+
+Provider events report success or error and elapsed seconds, without inputs, replies, or exception messages. Decision events report the decision source, action, and local execution success. Local success is not an independently measured application outcome. Callback exceptions are ignored so a telemetry failure does not alter model behavior; the callback is responsible for exporting or storing events safely.
 
 ## Connect a biocomputation service
 

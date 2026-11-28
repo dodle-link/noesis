@@ -657,17 +657,26 @@ class MemoryStore:
         tokens = set(re.findall(r"\w+", text.casefold())) if isinstance(text, str) else set()
         if not tokens:
             return []
-        matches = []
+        documents = []
         for index, item in enumerate(self.items):
             stored_input = item.get("input")
             stored_text = stored_input.get("value") if isinstance(stored_input, dict) else None
             if not isinstance(stored_text, str):
                 continue
             stored_tokens = set(re.findall(r"\w+", stored_text.casefold()))
-            overlap = len(tokens & stored_tokens)
+            documents.append((index, item, stored_tokens))
+        weights = {
+            token: 1 + math.log((len(documents) + 1) / (1 + sum(token in document for _, _, document in documents)))
+            for token in tokens
+        }
+        matches = []
+        for index, item, stored_tokens in documents:
+            overlap = tokens & stored_tokens
             if not overlap:
                 continue
-            relevance = overlap / len(tokens | stored_tokens)
+            relevance = sum(weights[token] for token in overlap) / (
+                sum(weights.values()) + len(stored_tokens - tokens)
+            )
             recency = (index + 1) / max(len(self.items), 1)
             matches.append((relevance, recency, item))
         matches.sort(key=lambda match: (match[0], match[1]), reverse=True)
@@ -679,6 +688,31 @@ class MemoryStore:
 
     def clear(self):
         self.items.clear()
+
+
+def evaluate_memory_retrieval(memory, queries, count=3):
+    """Score labeled retrieval queries against an existing memory store."""
+    if not isinstance(memory, MemoryStore):
+        raise ValueError("memory must be a MemoryStore.")
+    if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+        raise ValueError("count must be a positive integer.")
+    if not isinstance(queries, list) or not queries:
+        raise ValueError("queries must be a non-empty list.")
+    recall = 0.0
+    reciprocal_rank = 0.0
+    for query in queries:
+        if not isinstance(query, dict) or not isinstance(query.get("relevant_ids"), list) or not query["relevant_ids"]:
+            raise ValueError("Each query must have a non-empty relevant_ids list.")
+        relevant = query["relevant_ids"]
+        if any(not isinstance(identifier, str) or not identifier for identifier in relevant) or len(set(relevant)) != len(relevant):
+            raise ValueError("Relevant IDs must be distinct non-empty strings.")
+        known_ids = {item.get("id") for item in memory.items}
+        if not set(relevant) <= known_ids:
+            raise ValueError("Relevant IDs must exist in memory.")
+        found = [match["episode"]["id"] for match in memory.recall(query.get("input"), count)]
+        recall += len(set(found) & set(relevant)) / len(relevant)
+        reciprocal_rank += next((1 / rank for rank, identifier in enumerate(found, 1) if identifier in relevant), 0)
+    return {"queries": len(queries), "count": count, "recall": recall / len(queries), "mrr": reciprocal_rank / len(queries)}
 
 
 def _js_number(value):
@@ -1045,10 +1079,13 @@ def create_gguf_model_file(path, model):
 
 
 class AIEngine:
-    def __init__(self, model=None, provider=None):
+    def __init__(self, model=None, provider=None, *, event_callback=None):
+        if event_callback is not None and not callable(event_callback):
+            raise ValueError("event_callback must be callable.")
         self.model = model if model is not None else create_model()
         validate_model(self.model)
         self.provider = provider
+        self.event_callback = event_callback
         self.random = Random(self.model["randomSeed"])
         stored_network = self.model["network"]
         self.network = TinyNetwork(self.random)
@@ -1072,6 +1109,13 @@ class AIEngine:
             self_model.setdefault(key, value)
         self.workspace = self.state.setdefault("workspace", create_initial_workspace())
         self.goals = self.model["goals"]
+
+    def _emit_event(self, event):
+        if self.event_callback is not None:
+            try:
+                self.event_callback(event)
+            except Exception:
+                pass
 
     def encode_input(self, input_value, workspace=None):
         vector = array("f", [0]) * self.network.input_size
@@ -1424,6 +1468,12 @@ class AIEngine:
         }
         self.learn(evaluation, input_vector)
         self.sync_model()
+        self._emit_event({
+            "event": "decision",
+            "source": workspace.get("decisionSource") if workspace.get("decisionSource") in ("safety_rule", "rule", "goal", "prediction", "policy", "behavior") else "unknown",
+            "action": action["type"] if action["type"] in ACTION_LABELS else "other",
+            "success": bool(result.get("success")),
+        })
         return copy.deepcopy({
             "perception": perception,
             "interpretation": interpretation,
@@ -1435,22 +1485,36 @@ class AIEngine:
             "state": self.state,
         })
 
-    def respond(self, input_value, provider=None):
+    def respond(self, input_value, provider=None, *, context_filter=None):
         """Generate a provider reply, then run one local engine step."""
         active_provider = provider or self.provider or LLMProvider()
         workspace = self.open_workspace(self.observe(input_value), persist=False)
-        provider_state = copy.deepcopy(self.state)
-        provider_state["workspace"] = copy.deepcopy(workspace)
         provider_context = {
-            "user_input": input_value,
-            "state": provider_state,
-            "memories": [match["episode"] for match in workspace["memories"]],
+            "user_input": copy.deepcopy(input_value),
+            "state": {key: self.state[key] for key in ("energy", "curiosity", "confidence", "stability")},
+            "memories": [],
         }
-        if hasattr(active_provider, "generate_with_analysis"):
-            provider_response = active_provider.generate_with_analysis(**provider_context)
-        else:
-            provider_response = active_provider.generate(**provider_context)
-        normalized = normalize_provider_response(provider_response)
+        if context_filter is not None:
+            full_state = copy.deepcopy(self.state)
+            full_state["workspace"] = copy.deepcopy(workspace)
+            provider_context = context_filter({
+                "user_input": copy.deepcopy(input_value),
+                "state": full_state,
+                "memories": [copy.deepcopy(match["episode"]) for match in workspace["memories"]],
+            })
+            if not isinstance(provider_context, dict) or set(provider_context) != {"user_input", "state", "memories"}:
+                raise ValueError("context_filter must return user_input, state, and memories.")
+        started = time.monotonic()
+        try:
+            if hasattr(active_provider, "generate_with_analysis"):
+                provider_response = active_provider.generate_with_analysis(**provider_context)
+            else:
+                provider_response = active_provider.generate(**provider_context)
+            normalized = normalize_provider_response(provider_response)
+        except Exception:
+            self._emit_event({"event": "provider", "outcome": "error", "duration_seconds": time.monotonic() - started})
+            raise
+        self._emit_event({"event": "provider", "outcome": "success", "duration_seconds": time.monotonic() - started})
         result = self.step(input_value, provider_analysis=normalized["analysis"], workspace=workspace)
         result["reply"] = normalized["reply"]
         return result
@@ -1500,6 +1564,39 @@ class AIEngine:
 
     def get_behavior(self):
         return self.behavior.program
+
+
+def evaluate_task_outcomes(records):
+    """Summarize independently measured application outcomes by method and task."""
+    if not isinstance(records, list) or not records:
+        raise ValueError("records must be a non-empty list.")
+    methods = {}
+    for record in records:
+        if not isinstance(record, dict):
+            raise ValueError("Each outcome must be an object.")
+        task_id, method, success = (record.get(key) for key in ("task_id", "method", "success"))
+        if not isinstance(task_id, str) or not task_id.strip() or not isinstance(method, str) or not method.strip() or not isinstance(success, bool):
+            raise ValueError("Each outcome needs a task_id, method, and boolean success.")
+        tasks = methods.setdefault(method, {})
+        if task_id in tasks:
+            raise ValueError("Each method and task_id pair must be unique.")
+        tasks[task_id] = success
+    summaries = {
+        method: {"tasks": len(tasks), "success_rate": sum(tasks.values()) / len(tasks)}
+        for method, tasks in methods.items()
+    }
+    comparisons = {}
+    if "rule_baseline" in methods:
+        baseline = methods["rule_baseline"]
+        for method, tasks in methods.items():
+            if method == "rule_baseline":
+                continue
+            shared = tasks.keys() & baseline.keys()
+            comparisons[method] = {
+                "paired_tasks": len(shared),
+                "success_rate_difference": (sum(int(tasks[task]) - int(baseline[task]) for task in shared) / len(shared)) if shared else None,
+            }
+    return {"methods": summaries, "vs_rule_baseline": comparisons}
 
 
 def evaluate_action_scenarios(model, scenarios):
@@ -1721,6 +1818,15 @@ def train_action_model_from_episodes(path, training_episodes, validation_episode
     report = {"validation": _action_policy_metrics(_network_from_model(model), validation)}
     if test_scenarios is not None:
         report["test_scenarios"] = evaluate_action_scenarios(model, test_scenarios)
+        results = report["test_scenarios"]
+        report["test_comparison"] = {
+            label: {
+                "scenarios": len(results[label]["scenarios"]),
+                "success_rate_difference": results[label]["success_rate"] - results["rule_baseline"]["success_rate"],
+                "override_rate": results[label]["override_rate"],
+            }
+            for label in ("prediction", "policy")
+        }
     _write_model_artifacts(((path, serialize_model(model)), (gguf_path, serialize_gguf_model(model))))
     return model, report
 

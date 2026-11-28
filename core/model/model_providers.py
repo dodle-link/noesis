@@ -2,6 +2,7 @@ import http.client
 import json
 import math
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -436,7 +437,7 @@ class LLMProvider:
 
     MAX_PAYLOAD_SIZE = 1024 * 1024
 
-    def __init__(self, provider=None, api_key=None, model=None, timeout=30, base_url=None):
+    def __init__(self, provider=None, api_key=None, model=None, timeout=30, base_url=None, *, max_retries=0):
         self.provider = (provider or os.environ.get("NOESIS_PROVIDER", "openai")).lower()
         if self.provider not in ("openai", "gemini", "openai-compatible"):
             raise ValueError("Provider must be 'openai', 'gemini', or 'openai-compatible'.")
@@ -470,6 +471,9 @@ class LLMProvider:
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("LLM timeout must be a positive finite number.")
         self.timeout = timeout
+        if isinstance(max_retries, bool) or not isinstance(max_retries, int) or not 0 <= max_retries <= 2:
+            raise ValueError("max_retries must be an integer between 0 and 2.")
+        self.max_retries = max_retries
         self.base_url = (
             base_url
             or os.environ.get("NOESIS_BASE_URL")
@@ -552,39 +556,53 @@ class LLMProvider:
             headers={"Content-Type": "application/json", **headers},
             method="POST",
         )
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                response_headers = getattr(response, "headers", None)
-                content_type = (
-                    response_headers.get("Content-Type")
-                    if response_headers is not None
-                    else None
-                )
-                if content_type is not None:
-                    media_type = content_type.split(";", 1)[0].strip().lower()
-                    if media_type != "application/json" and not media_type.endswith(
-                        "+json"
-                    ):
-                        raise LLMProviderError(
-                            "LLM API response must use a JSON content type."
-                        )
-                response_data = response.read(self.MAX_PAYLOAD_SIZE + 1)
-        except urllib.error.HTTPError as error:
-            raise LLMProviderError(
-                f"{self.provider} API request failed with HTTP {error.code}."
-            ) from error
-        except LLMProviderError:
-            raise
-        except (
-            urllib.error.URLError,
-            TimeoutError,
-            OSError,
-            http.client.HTTPException,
-            ValueError,
-        ) as error:
-            raise LLMProviderError(
-                f"{self.provider} API request failed ({type(error).__name__})."
-            ) from error
+        for attempt in range(self.max_retries + 1):
+            try:
+                with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                    response_headers = getattr(response, "headers", None)
+                    content_type = (
+                        response_headers.get("Content-Type")
+                        if response_headers is not None
+                        else None
+                    )
+                    if content_type is not None:
+                        media_type = content_type.split(";", 1)[0].strip().lower()
+                        if media_type != "application/json" and not media_type.endswith(
+                            "+json"
+                        ):
+                            raise LLMProviderError(
+                                "LLM API response must use a JSON content type."
+                            )
+                    response_data = response.read(self.MAX_PAYLOAD_SIZE + 1)
+                break
+            except urllib.error.HTTPError as error:
+                delay = 0.25 * (2 ** attempt)
+                retry_after = error.headers.get("Retry-After") if error.headers else None
+                if retry_after is not None:
+                    try:
+                        retry_delay = float(retry_after)
+                        delay = max(delay, retry_delay) if math.isfinite(retry_delay) and retry_delay >= 0 else float("inf")
+                    except (TypeError, ValueError):
+                        delay = float("inf")
+                if error.code not in (429, 503) or attempt >= self.max_retries or not math.isfinite(delay) or delay > 2:
+                    error.close()
+                    raise LLMProviderError(
+                        f"{self.provider} API request failed with HTTP {error.code}."
+                    ) from error
+                error.close()
+                time.sleep(delay)
+            except LLMProviderError:
+                raise
+            except (
+                urllib.error.URLError,
+                TimeoutError,
+                OSError,
+                http.client.HTTPException,
+                ValueError,
+            ) as error:
+                raise LLMProviderError(
+                    f"{self.provider} API request failed ({type(error).__name__})."
+                ) from error
         if len(response_data) > self.MAX_PAYLOAD_SIZE:
             raise LLMProviderError("LLM API response exceeds the 1 MiB limit.")
         try:
